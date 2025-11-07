@@ -1,0 +1,21 @@
+body {
+  background: black;
+}
+
+canvas {
+  /* margin: 0 !important; */
+}
+
+#ad {
+  position: absolute;
+  z-index: 999;
+  top: 0px;
+  bottom: 0px;
+  left: 0px;
+  right: 0px;
+  margin: auto;
+  width: 80%;
+  height: 40%;
+  background: red;
+  display: none;
+}
