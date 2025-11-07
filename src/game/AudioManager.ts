@@ -21,11 +21,14 @@ export class AudioManager {
     this.scene.load.audio('bgm_result', 'assets/bgm/minimal2_001.ogg')
 
     // Sound effects
+    this.scene.load.audio('se_start', 'assets/sound/se_start.ogg')
     this.scene.load.audio('se_rotate', 'assets/sound/se_rotate.ogg')
     this.scene.load.audio('se_select_rule', 'assets/sound/se_select_rule.ogg')
     this.scene.load.audio('se_zone_reach', 'assets/sound/se_zone_reach.ogg')
     this.scene.load.audio('se_ambulance', 'assets/sound/se_ambulance.ogg')
     this.scene.load.audio('se_mod', 'assets/sound/se_mod.ogg')
+    this.scene.load.audio('se_speed_up', 'assets/sound/se_speed_up.ogg')
+    this.scene.load.audio('se_speed_down', 'assets/sound/se_speed_down.ogg')
     this.scene.load.audio(
       'se_start_bullet_time',
       'assets/sound/se_start_bullet_time.ogg'
@@ -39,12 +42,16 @@ export class AudioManager {
       'assets/sound/se_finish_revolution.ogg'
     )
 
+    // Additional sound effects
+    this.scene.load.audio('se_stop', 'assets/sound/se_stop.ogg')
+
     // Voice clips
     this.scene.load.audio('voice_chin', 'assets/sound/voice_chin.ogg')
     this.scene.load.audio('voice_chiro', 'assets/sound/voice_chiro.ogg')
     this.scene.load.audio('voice_rin', 'assets/sound/voice_rin.ogg')
     this.scene.load.audio('voice_info', 'assets/sound/voice_info.ogg')
     this.scene.load.audio('voice_back', 'assets/sound/voice_back.ogg')
+    this.scene.load.audio('voice_rollback', 'assets/sound/voice_rollback.ogg')
     this.scene.load.audio('voice_rule_2943', 'assets/sound/voice_rule_2943.ogg')
     this.scene.load.audio('voice_rule_8390', 'assets/sound/voice_rule_8390.ogg')
     this.scene.load.audio(
@@ -141,5 +148,26 @@ export class AudioManager {
     num = (num % 4) + 1
 
     this.playBGM(`bgm_${num}`, 0.2)
+  }
+
+  changeBGMVolume(volume: number): void {
+    // Change volume of current BGM
+    if (this.currentBGM && this.bgmTracks.has(this.currentBGM)) {
+      const bgm = this.bgmTracks.get(this.currentBGM)
+      if (bgm && 'setVolume' in bgm) {
+        ;(
+          bgm as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound
+        ).setVolume(volume)
+      }
+    }
+
+    // Change volume for all BGM tracks
+    this.bgmTracks.forEach(bgm => {
+      if ('setVolume' in bgm) {
+        ;(
+          bgm as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound
+        ).setVolume(volume)
+      }
+    })
   }
 }
