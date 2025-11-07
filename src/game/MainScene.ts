@@ -1,6 +1,7 @@
 // Main Game Scene for Tin! Tilo! Rings!
 import Phaser from 'phaser'
 import { Rule, RuleType } from './rule'
+import { AudioManager } from './AudioManager'
 
 type GameMode =
   | 'first'
@@ -25,22 +26,19 @@ export class MainScene extends Phaser.Scene {
   private elapsed_time: number = 0
   private bet_times: number = 0
   private total_score: number = 0
+  private audio!: AudioManager
+  private backButton!: Phaser.GameObjects.Image
+  private preventClick = false
 
   private speed: number = 4
-  private speed_bk: number = 4
 
   private i_combo: number = 0
-  private i_score_1000: number = 0
   private i_second_1: number = 0
   private i_minute_1: number = 0
 
-  private reserve_change_BGM: boolean = false
-  private reserve_start_zone: boolean = false
-  private reserve_finish_zone: boolean = false
   private zone_seconds: number = 0
   private bullet_time: boolean = false
   private revolution: boolean = false
-  private rollback_stock: number = 0
 
   // Ring sprites
   private ring1Sprites: Phaser.GameObjects.Image[] = []
@@ -115,7 +113,18 @@ export class MainScene extends Phaser.Scene {
     super({ key: 'MainScene' })
   }
 
+  init(data: { rule?: string }): void {
+    // Get rule from title scene
+    if (data.rule) {
+      this.rule = data.rule as RuleType
+    }
+  }
+
   preload(): void {
+    // Initialize audio manager
+    this.audio = new AudioManager(this)
+    this.audio.preload()
+
     // Load all ring images
     for (const color of ['white', 'yellow', 'pink', 'gray']) {
       for (let i = 0; i < 10; i++) {
@@ -131,13 +140,7 @@ export class MainScene extends Phaser.Scene {
       this.load.image(`bg_${i}`, `assets/image/bg/bg_${i}.png`)
     }
 
-    // Load title images
-    this.load.image('bg_title', 'assets/image/title/bg_title.png')
-    this.load.image('button_info', 'assets/image/title/button_info.png')
-    this.load.image(
-      'button_info_hover',
-      'assets/image/title/button_info_hover.png'
-    )
+    // Load button images
     this.load.image('button_back', 'assets/image/title/button_back.png')
     this.load.image(
       'button_back_hover',
@@ -170,22 +173,6 @@ export class MainScene extends Phaser.Scene {
       'assets/image/effect/bg_triple_seven.png'
     )
     this.load.image('effect_hand', 'assets/image/effect/effect_hand.png')
-
-    // Load BGM
-    this.load.audio('bgm_1', 'assets/bgm/minimal_004.ogg')
-    this.load.audio('bgm_2', 'assets/bgm/minimal_008.ogg')
-    this.load.audio('bgm_3', 'assets/bgm/minimal_007.ogg')
-    this.load.audio('bgm_4', 'assets/bgm/minimal_016.ogg')
-    this.load.audio('bgm_result', 'assets/bgm/minimal2_001.ogg')
-
-    // Load sound effects
-    this.load.audio('se_start', 'assets/sound/se_start.ogg')
-    this.load.audio('se_stop', 'assets/sound/se_stop.ogg')
-    this.load.audio('se_rotate', 'assets/sound/se_rotate.ogg')
-    this.load.audio('voice_ready_1', 'assets/sound/voice_ready_1.ogg')
-    this.load.audio('voice_ready_2', 'assets/sound/voice_ready_2.ogg')
-    this.load.audio('voice_ready_3', 'assets/sound/voice_ready_3.ogg')
-    this.load.audio('voice_reach', 'assets/sound/voice_reach.ogg')
   }
 
   create(): void {
@@ -195,6 +182,32 @@ export class MainScene extends Phaser.Scene {
     this.bgSprite = this.add.image(width / 2, height / 2, 'bg_1')
     this.bgSprite.setDisplaySize(width, height)
     this.bgSprite.setAlpha(0.3)
+
+    // Create back button
+    this.backButton = this.add.image(34, 30, 'button_back')
+    this.backButton.setAlpha(0.5)
+    this.backButton.setInteractive({ useHandCursor: true })
+
+    this.backButton.on('pointerover', () => {
+      if (this.mode === 'first' || this.mode === 'ready') return
+      this.backButton.setTexture('button_back_hover')
+      this.audio.playSound('voice_back')
+    })
+
+    this.backButton.on('pointerout', () => {
+      this.backButton.setTexture('button_back')
+    })
+
+    this.backButton.on('pointerdown', () => {
+      if (this.mode === 'first' || this.mode === 'ready') return
+      if (this.preventClick) return
+
+      this.preventClick = true
+      this.audio.stopBGM()
+
+      // Return to title scene
+      this.scene.start('TitleScene', { back: true })
+    })
 
     // Create rings
     this.createRings()
@@ -223,15 +236,29 @@ export class MainScene extends Phaser.Scene {
 
     // Input
     this.input.keyboard?.on('keydown-SPACE', () => {
-      this.changeMode()
+      if (!this.preventClick) {
+        this.changeMode()
+      }
     })
 
-    this.input.on('pointerdown', () => {
-      this.changeMode()
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Ignore clicks on back button
+      if (
+        !this.preventClick &&
+        !Phaser.Geom.Rectangle.Contains(
+          this.backButton.getBounds(),
+          pointer.x,
+          pointer.y
+        )
+      ) {
+        this.changeMode()
+      }
     })
 
     // Start game
     this.time.delayedCall(1000, () => {
+      // Play BGM
+      this.audio.playBGM('bgm_1', 0.2)
       this.changeMode()
     })
   }
@@ -298,7 +325,7 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  update(time: number, delta: number): void {
+  update(_time: number, delta: number): void {
     // Update elapsed time
     if (!['first', 'ready', 'shown_result'].includes(this.mode)) {
       this.elapsed_time += delta
@@ -314,9 +341,7 @@ export class MainScene extends Phaser.Scene {
         if (this.bullet_time || this.revolution) {
           if (this.zone_seconds > 0) {
             this.zone_seconds--
-            if (this.zone_seconds <= 0) {
-              this.reserve_finish_zone = true
-            }
+            // TODO: Implement zone finish
           }
         }
       }
@@ -324,7 +349,7 @@ export class MainScene extends Phaser.Scene {
       const iMinute1 = Math.floor(second / 60)
       if (iMinute1 > this.i_minute_1) {
         this.i_minute_1 = iMinute1
-        this.reserve_change_BGM = true
+        // TODO: Implement BGM change
       }
     }
 
@@ -416,9 +441,13 @@ export class MainScene extends Phaser.Scene {
     this.ring2Sprites.forEach(sprite => sprite.setAlpha(1))
     this.ring3Sprites.forEach(sprite => sprite.setAlpha(1))
 
+    // Play ready voices (3, 2, 1)
     this.time.delayedCall(500, () => {
-      this.time.delayedCall(1700, () => {
-        this.time.delayedCall(1300, () => {
+      this.audio.playSound('voice_ready_3')
+      this.time.delayedCall(700, () => {
+        this.audio.playSound('voice_ready_2')
+        this.time.delayedCall(700, () => {
+          this.audio.playSound('voice_ready_1')
           this.time.delayedCall(700, () => {
             this.mode = 'ready'
             this.changeMode()
@@ -433,6 +462,9 @@ export class MainScene extends Phaser.Scene {
     this.bet_times++
     this.betTimesText.setText(`回数: ${this.bet_times}`)
     this.mode = 'rotate_3'
+
+    // Play rotation sound
+    this.audio.playSound('se_rotate', 0.3)
   }
 
   private brakeRing1(): void {

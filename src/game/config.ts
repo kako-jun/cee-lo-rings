@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { TitleScene } from './TitleScene'
 import { MainScene } from './MainScene'
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
@@ -7,5 +8,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   height: 960,
   parent: 'phaser-game',
   backgroundColor: '#732121',
-  scene: [MainScene],
+  scene: [TitleScene, MainScene],
 }
