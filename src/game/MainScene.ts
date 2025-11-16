@@ -1,8 +1,18 @@
 // Main Game Scene for Tin! Tilo! Rings!
+// Complete port from Phina.js version
 import Phaser from 'phaser'
 import { Rule, RuleType, type Score } from './rule'
 import { type Roll } from './rolls'
 import { AudioManager } from './AudioManager'
+import {
+  RingSprites,
+  BackgroundSprites,
+  KanjiSprites,
+  MonSprites,
+  ScoresSprites,
+  CurrentScoreSprites,
+  TotalScoreSprites,
+} from './Sprites'
 
 type GameMode =
   | 'first'
@@ -41,22 +51,20 @@ export class MainScene extends Phaser.Scene {
   private bullet_time: boolean = false
   private revolution: boolean = false
 
-  // Ring sprites
-  private ring1Sprites: Phaser.GameObjects.Image[] = []
-  private ring2Sprites: Phaser.GameObjects.Image[] = []
-  private ring3Sprites: Phaser.GameObjects.Image[] = []
+  // Ring sprites - using new sprite classes
+  private ringSprites1!: RingSprites
+  private ringSprites2!: RingSprites
+  private ringSprites3!: RingSprites
 
-  private ring1_ns: number[] = []
-  private ring2_ns: number[] = []
-  private ring3_ns: number[] = []
+  // Decorative sprites
+  private backgroundSprites!: BackgroundSprites
+  private kanjiSprites!: KanjiSprites
+  private monSprites!: MonSprites
 
-  private ring1_eyes: number[] = []
-  private ring2_eyes: number[] = []
-  private ring3_eyes: number[] = []
-
-  private ring1_color: string = 'white'
-  private ring2_color: string = 'white'
-  private ring3_color: string = 'white'
+  // Score display sprites
+  private scoresSprites!: ScoresSprites
+  private currentScoreSprites!: CurrentScoreSprites
+  private totalScoreSprites!: TotalScoreSprites
 
   // UI elements
   private totalScoreText!: Phaser.GameObjects.Text
@@ -253,20 +261,58 @@ export class MainScene extends Phaser.Scene {
       'assets/image/effect/bg_triple_seven.png'
     )
     this.load.image('effect_hand', 'assets/image/effect/effect_hand.png')
+
+    // Load kanji images (decorative Japanese characters)
+    for (let i = 1; i <= 35; i++) {
+      this.load.image(`kanji_${i}`, `assets/image/kanji/kanji_${i}.png`)
+    }
+
+    // Load mon images (decorative emblems)
+    for (let i = 1; i <= 14; i++) {
+      this.load.image(`mon_${i}`, `assets/image/mon/mon_${i}.png`)
+    }
+
+    // Load line images (visual separators)
+    this.load.image('line_h_1', 'assets/image/line/line_h_1.png')
+    this.load.image('line_h_2', 'assets/image/line/line_h_2.png')
+    this.load.image('line_h_3', 'assets/image/line/line_h_3.png')
+    this.load.image('line_v_1', 'assets/image/line/line_v_1.png')
+
+    // Load mod value images
+    for (let i = 0; i <= 9; i++) {
+      this.load.image(`mod_n_${i}`, `assets/image/mod/mod_n_${i}.png`)
+    }
+
+    // Load dummy image (used for placeholder)
+    this.load.image('dummy', 'assets/image/dummy.png')
   }
 
   create(): void {
     const { width, height } = this.cameras.main
 
-    // Background
-    this.bgSprite = this.add.image(width / 2, height / 2, 'bg_1')
-    this.bgSprite.setDisplaySize(width, height)
-    this.bgSprite.setAlpha(0.3)
+    // Set background color
+    this.cameras.main.setBackgroundColor('#732121')
+
+    // Create decorative sprites (background animations)
+    this.backgroundSprites = new BackgroundSprites(this)
+    this.kanjiSprites = new KanjiSprites(this)
+    this.monSprites = new MonSprites(this)
+
+    // Create ring sprites
+    this.ringSprites1 = new RingSprites(this, 100, 300, 'left')
+    this.ringSprites2 = new RingSprites(this, 142, 300, 'center')
+    this.ringSprites3 = new RingSprites(this, 184, 300, 'right')
+
+    // Create score display sprites
+    this.scoresSprites = new ScoresSprites(this, 520, 300)
+    this.currentScoreSprites = new CurrentScoreSprites(this, 520, 790)
+    this.totalScoreSprites = new TotalScoreSprites(this, 245, 925)
 
     // Create back button
     this.backButton = this.add.image(34, 30, 'button_back')
     this.backButton.setAlpha(0.5)
     this.backButton.setInteractive({ useHandCursor: true })
+    this.backButton.setDepth(100)
 
     this.backButton.on('pointerover', () => {
       if (this.mode === 'first' || this.mode === 'ready') return
@@ -289,9 +335,6 @@ export class MainScene extends Phaser.Scene {
       this.scene.start('TitleScene', { back: true })
     })
 
-    // Create rings
-    this.createRings()
-
     // UI Text
     this.totalScoreText = this.add
       .text(245, 925, `スコア: ${this.total_score}`, {
@@ -299,6 +342,7 @@ export class MainScene extends Phaser.Scene {
         color: '#FFFFFF',
       })
       .setOrigin(0.5)
+      .setDepth(10)
 
     this.timeText = this.add
       .text(245, 17, `時間: 0`, {
@@ -306,6 +350,7 @@ export class MainScene extends Phaser.Scene {
         color: '#FFFFFF',
       })
       .setOrigin(0.5)
+      .setDepth(10)
 
     this.betTimesText = this.add
       .text(245, 60, `回数: 0`, {
@@ -313,6 +358,7 @@ export class MainScene extends Phaser.Scene {
         color: '#FFFFFF',
       })
       .setOrigin(0.5)
+      .setDepth(10)
 
     // Input
     this.input.keyboard?.on('keydown-SPACE', () => {
