@@ -15,8 +15,6 @@ export class RingSprites {
   private x: number
   private y: number
   private position: 'left' | 'center' | 'right'
-  private ns: number[] = []
-  private color: string = 'white'
   private basicAlpha: number = 1
   public eyes: number[] = []
 
@@ -36,9 +34,6 @@ export class RingSprites {
     // Remove old sprites
     this.sprites.forEach(sprite => sprite.destroy())
     this.sprites = []
-
-    this.ns = ns
-    this.color = color
 
     // Create 40 sprites for infinite scroll effect (4 sets of 10)
     for (let i = 0; i < 40; i++) {
@@ -83,7 +78,7 @@ export class RingSprites {
     })
   }
 
-  brake(speed: number, callback: () => void): void {
+  brake(_speed: number, callback: () => void): void {
     let maxDuration = 0
 
     this.sprites.forEach((sprite, i) => {
@@ -157,8 +152,7 @@ export class RingSprites {
     else if (sprite.y >= 700 && sprite.y <= 1000) {
       const delta = (300 - (1000 - sprite.y)) / 300
       sprite.alpha = (1 - delta) * this.basicAlpha
-      sprite.x =
-        this.x + delta * delta * 100 * ringPattern.bottom.xRatio
+      sprite.x = this.x + delta * delta * 100 * ringPattern.bottom.xRatio
       sprite.displayWidth =
         42 + (42 * ringPattern.bottom.widthRatio - 42) * delta
     }
@@ -247,7 +241,6 @@ export class BackgroundSprites {
       { angle: 0, duration: 40000 },
     ]
 
-    let currentRotation = 0
     const doRotation = (index: number) => {
       const rot = rotations[index]
       this.scene.tweens.add({
@@ -273,7 +266,6 @@ export class BackgroundSprites {
       { x: baseX, y: baseY, duration: 10000 },
     ]
 
-    let currentMove = 0
     const doMove = (index: number) => {
       const move = movements[index]
       this.scene.tweens.add({
@@ -342,7 +334,6 @@ export class KanjiSprites {
       { angle: -360, duration: 120000, ease: 'Back.easeInOut' },
     ]
 
-    let currentRotation = 0
     const doRotation = (index: number) => {
       const rot = rotations[index]
       this.scene.tweens.add({
@@ -374,7 +365,6 @@ export class KanjiSprites {
       { x: -450, y: 200, duration: 14000 },
     ]
 
-    let currentMove = 0
     const doMove = (index: number) => {
       const move = movements[index]
       this.scene.tweens.add({
@@ -483,7 +473,6 @@ export class MonSprites {
       { angle: -360, duration: 10000, ease: 'Elastic.easeInOut' },
     ]
 
-    let currentRotation = 0
     const doRotation = (index: number) => {
       const rot = rotations[index]
       this.scene.tweens.add({
@@ -515,7 +504,6 @@ export class MonSprites {
       { x: 450, y: -200, duration: 10000 },
     ]
 
-    let currentMove = 0
     const doMove = (index: number) => {
       const move = movements[index]
       this.scene.tweens.add({
@@ -594,16 +582,33 @@ export class ScoresSprites {
     this.hide()
 
     let yOffset = 0
-    scores.forEach((score, i) => {
-      const roll = score.roll
-      if (!roll.won) return
+    scores.forEach(score => {
+      if (typeof score.roll === 'string' || !score.roll.won) return
 
-      // Determine step for timing
+      const roll = score.roll
+
+      // Determine step for timing based on rule
+      // Kabu rolls: pin, nizou, santa, yotsuya, goke, roppou, shichiken, oicho, kabu
+      // Me rolls: me, pinbasami
+      const kabuRollNames = [
+        'pin',
+        'nizou',
+        'santa',
+        'yotsuya',
+        'goke',
+        'roppou',
+        'shichiken',
+        'oicho',
+        'kabu',
+      ]
+
       let delay = 0
       if (roll.f === 'add' && roll.name !== 'pink_ribbon') {
-        delay = 0 // me step
-      } else if (roll.f === 'kabu') {
-        delay = 500 // kabu step
+        if (kabuRollNames.includes(roll.name)) {
+          delay = 500 // kabu step
+        } else {
+          delay = 0 // me step
+        }
       } else {
         delay = 1000 // multi step
       }
