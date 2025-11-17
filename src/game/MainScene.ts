@@ -1,8 +1,18 @@
 // Main Game Scene for Tin! Tilo! Rings!
+// Complete port from Phina.js version
 import Phaser from 'phaser'
 import { Rule, RuleType, type Score } from './rule'
 import { type Roll } from './rolls'
 import { AudioManager } from './AudioManager'
+import {
+  RingSprites,
+  BackgroundSprites,
+  KanjiSprites,
+  MonSprites,
+  ScoresSprites,
+  CurrentScoreSprites,
+  TotalScoreSprites,
+} from './Sprites'
 
 type GameMode =
   | 'first'
@@ -41,39 +51,28 @@ export class MainScene extends Phaser.Scene {
   private bullet_time: boolean = false
   private revolution: boolean = false
 
-  // Ring sprites
-  private ring1Sprites: Phaser.GameObjects.Image[] = []
-  private ring2Sprites: Phaser.GameObjects.Image[] = []
-  private ring3Sprites: Phaser.GameObjects.Image[] = []
+  // Ring sprites - using new sprite classes
+  private ringSprites1!: RingSprites
+  private ringSprites2!: RingSprites
+  private ringSprites3!: RingSprites
 
-  private ring1_ns: number[] = []
-  private ring2_ns: number[] = []
-  private ring3_ns: number[] = []
+  // Decorative sprites
+  private backgroundSprites!: BackgroundSprites
+  private kanjiSprites!: KanjiSprites
+  private monSprites!: MonSprites
 
-  private ring1_eyes: number[] = []
-  private ring2_eyes: number[] = []
-  private ring3_eyes: number[] = []
-
-  private ring1_color: string = 'white'
-  private ring2_color: string = 'white'
-  private ring3_color: string = 'white'
+  // Score display sprites
+  private scoresSprites!: ScoresSprites
+  private currentScoreSprites!: CurrentScoreSprites
+  private totalScoreSprites!: TotalScoreSprites
 
   // UI elements
   private totalScoreText!: Phaser.GameObjects.Text
   private timeText!: Phaser.GameObjects.Text
   private betTimesText!: Phaser.GameObjects.Text
 
-  // Background
-  private bgSprite!: Phaser.GameObjects.Image
-  private bgIndex: number = 0
-
   // Guide sprites
   private guideSprites: Map<string, Phaser.GameObjects.Image> = new Map()
-
-  // Score display sprites
-  private scoreImages: Phaser.GameObjects.Image[] = []
-  private comboImages: Phaser.GameObjects.Image[] = []
-  private currentScoreImages: Phaser.GameObjects.Image[] = []
 
   // Effect sprites
   private effectSprite: Phaser.GameObjects.Image | null = null
@@ -253,20 +252,61 @@ export class MainScene extends Phaser.Scene {
       'assets/image/effect/bg_triple_seven.png'
     )
     this.load.image('effect_hand', 'assets/image/effect/effect_hand.png')
+
+    // Load kanji images (decorative Japanese characters)
+    for (let i = 1; i <= 35; i++) {
+      this.load.image(`kanji_${i}`, `assets/image/kanji/kanji_${i}.png`)
+    }
+
+    // Load mon images (decorative emblems)
+    for (let i = 1; i <= 14; i++) {
+      this.load.image(`mon_${i}`, `assets/image/mon/mon_${i}.png`)
+    }
+
+    // Load line images (visual separators)
+    this.load.image('line_h_1', 'assets/image/line/line_h_1.png')
+    this.load.image('line_h_2', 'assets/image/line/line_h_2.png')
+    this.load.image('line_h_3', 'assets/image/line/line_h_3.png')
+    this.load.image('line_v_1', 'assets/image/line/line_v_1.png')
+
+    // Load mod value images
+    for (let i = 0; i <= 9; i++) {
+      this.load.image(`mod_n_${i}`, `assets/image/mod/mod_n_${i}.png`)
+    }
+
+    // Load dummy image (used for placeholder)
+    this.load.image('dummy', 'assets/image/dummy.png')
   }
 
   create(): void {
-    const { width, height } = this.cameras.main
+    // Set background color
+    this.cameras.main.setBackgroundColor('#732121')
 
-    // Background
-    this.bgSprite = this.add.image(width / 2, height / 2, 'bg_1')
-    this.bgSprite.setDisplaySize(width, height)
-    this.bgSprite.setAlpha(0.3)
+    // Create decorative sprites (background animations)
+    // These sprites are created for decorative animated background effects
+    this.backgroundSprites = new BackgroundSprites(this)
+    this.kanjiSprites = new KanjiSprites(this)
+    this.monSprites = new MonSprites(this)
+    // Mark as intentionally used for side effects
+    void this.backgroundSprites
+    void this.kanjiSprites
+    void this.monSprites
+
+    // Create ring sprites
+    this.ringSprites1 = new RingSprites(this, 100, 300, 'left')
+    this.ringSprites2 = new RingSprites(this, 142, 300, 'center')
+    this.ringSprites3 = new RingSprites(this, 184, 300, 'right')
+
+    // Create score display sprites
+    this.scoresSprites = new ScoresSprites(this, 520, 300)
+    this.currentScoreSprites = new CurrentScoreSprites(this, 520, 790)
+    this.totalScoreSprites = new TotalScoreSprites(this, 245, 925)
 
     // Create back button
     this.backButton = this.add.image(34, 30, 'button_back')
     this.backButton.setAlpha(0.5)
     this.backButton.setInteractive({ useHandCursor: true })
+    this.backButton.setDepth(100)
 
     this.backButton.on('pointerover', () => {
       if (this.mode === 'first' || this.mode === 'ready') return
@@ -289,9 +329,6 @@ export class MainScene extends Phaser.Scene {
       this.scene.start('TitleScene', { back: true })
     })
 
-    // Create rings
-    this.createRings()
-
     // UI Text
     this.totalScoreText = this.add
       .text(245, 925, `スコア: ${this.total_score}`, {
@@ -299,6 +336,7 @@ export class MainScene extends Phaser.Scene {
         color: '#FFFFFF',
       })
       .setOrigin(0.5)
+      .setDepth(10)
 
     this.timeText = this.add
       .text(245, 17, `時間: 0`, {
@@ -306,6 +344,7 @@ export class MainScene extends Phaser.Scene {
         color: '#FFFFFF',
       })
       .setOrigin(0.5)
+      .setDepth(10)
 
     this.betTimesText = this.add
       .text(245, 60, `回数: 0`, {
@@ -313,6 +352,7 @@ export class MainScene extends Phaser.Scene {
         color: '#FFFFFF',
       })
       .setOrigin(0.5)
+      .setDepth(10)
 
     // Input
     this.input.keyboard?.on('keydown-SPACE', () => {
@@ -341,68 +381,6 @@ export class MainScene extends Phaser.Scene {
       this.audio.playBGM('bgm_1', 0.2)
       this.changeMode()
     })
-  }
-
-  private createRings(): void {
-    const positions = [
-      { x: 100, y: 300 },
-      { x: 142, y: 300 },
-      { x: 184, y: 300 },
-    ]
-
-    // Initialize ring values
-    this.ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    this.ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    this.ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-    // Create ring sprites (40 sprites per ring for infinite scroll effect)
-    for (let i = 0; i < 40; i++) {
-      const i2 = i % 10
-      const n1 = this.ring1_ns[i2]
-      const n2 = this.ring2_ns[i2]
-      const n3 = this.ring3_ns[i2]
-
-      let yOffset = 0
-      if (i < 10) {
-        yOffset = -42 * 10 + 42 * i
-      } else if (i < 20) {
-        yOffset = 42 * (i - 10)
-      } else if (i < 30) {
-        yOffset = 42 * 10 + 42 * (i - 20)
-      } else {
-        yOffset = 42 * 20 + 42 * (i - 30)
-      }
-
-      const sprite1 = this.add.image(
-        positions[0].x,
-        positions[0].y + yOffset,
-        `white_n_${n1}`
-      )
-      sprite1.setData('n', n1)
-      sprite1.setData('initialY', positions[0].y + yOffset)
-      sprite1.setAlpha(0)
-      this.ring1Sprites.push(sprite1)
-
-      const sprite2 = this.add.image(
-        positions[1].x,
-        positions[1].y + yOffset,
-        `white_n_${n2}`
-      )
-      sprite2.setData('n', n2)
-      sprite2.setData('initialY', positions[1].y + yOffset)
-      sprite2.setAlpha(0)
-      this.ring2Sprites.push(sprite2)
-
-      const sprite3 = this.add.image(
-        positions[2].x,
-        positions[2].y + yOffset,
-        `white_n_${n3}`
-      )
-      sprite3.setData('n', n3)
-      sprite3.setData('initialY', positions[2].y + yOffset)
-      sprite3.setAlpha(0)
-      this.ring3Sprites.push(sprite3)
-    }
   }
 
   update(_time: number, delta: number): void {
@@ -434,53 +412,32 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    // Update ring rotations
+    // Update ring rotations using new sprite classes
     switch (this.mode) {
       case 'rotate_3':
-        this.rotateRing(this.ring1Sprites, this.speed)
-        this.rotateRing(this.ring2Sprites, this.speed + 1)
-        this.rotateRing(this.ring3Sprites, this.speed + 2)
+        this.ringSprites1.rotate(this.speed)
+        this.ringSprites2.rotate(this.speed + 1)
+        this.ringSprites3.rotate(this.speed + 2)
         break
       case 'braking_3':
-        this.rotateRing(this.ring2Sprites, this.speed + 1)
-        this.rotateRing(this.ring3Sprites, this.speed + 2)
+        this.ringSprites2.rotate(this.speed + 1)
+        this.ringSprites3.rotate(this.speed + 2)
         break
       case 'rotate_2':
-        this.rotateRing(this.ring2Sprites, this.speed)
-        this.rotateRing(this.ring3Sprites, this.speed + 1)
+        this.ringSprites2.rotate(this.speed)
+        this.ringSprites3.rotate(this.speed + 1)
         break
       case 'braking_2':
-        this.rotateRing(this.ring3Sprites, this.speed + 1)
+        this.ringSprites3.rotate(this.speed + 1)
         break
       case 'rotate_1':
-        this.rotateRing(this.ring3Sprites, this.speed)
+        this.ringSprites3.rotate(this.speed)
         break
     }
-  }
 
-  private rotateRing(sprites: Phaser.GameObjects.Image[], speed: number): void {
-    sprites.forEach(sprite => {
-      sprite.y -= speed
-
-      const initialY = sprite.getData('initialY')
-      if (sprite.y <= initialY - 42 * 10) {
-        sprite.y = initialY
-      }
-
-      this.updateRingSprite(sprite)
-    })
-  }
-
-  private updateRingSprite(sprite: Phaser.GameObjects.Image): void {
-    // Update alpha based on Y position for fade effect
-    if (sprite.y >= -40 && sprite.y <= 200) {
-      const delta = (sprite.y + 40) / 240
-      sprite.setAlpha(delta)
-    } else if (sprite.y >= 700 && sprite.y <= 1000) {
-      const delta = (300 - (1000 - sprite.y)) / 300
-      sprite.setAlpha(1 - delta)
-    } else {
-      sprite.setAlpha(1)
+    // Finish zone if time is up
+    if (this.zone_seconds <= 0 && (this.bullet_time || this.revolution)) {
+      this.finishZone()
     }
   }
 
@@ -518,9 +475,18 @@ export class MainScene extends Phaser.Scene {
   }
 
   private startReady(): void {
-    this.ring1Sprites.forEach(sprite => sprite.setAlpha(1))
-    this.ring2Sprites.forEach(sprite => sprite.setAlpha(1))
-    this.ring3Sprites.forEach(sprite => sprite.setAlpha(1))
+    // Initialize rings with random numbers
+    const ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    const ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    const ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    this.ringSprites1.redraw(ring1_ns, 'white')
+    this.ringSprites2.redraw(ring2_ns, 'white')
+    this.ringSprites3.redraw(ring3_ns, 'white')
+
+    this.ringSprites1.show()
+    this.ringSprites2.show()
+    this.ringSprites3.show()
 
     // Play ready voices (3, 2, 1)
     this.time.delayedCall(500, () => {
@@ -551,8 +517,8 @@ export class MainScene extends Phaser.Scene {
 
   private brakeRing1(): void {
     this.mode = 'braking_3'
-    this.time.delayedCall(500, () => {
-      this.stopRing(this.ring1Sprites)
+    this.ringSprites1.brake(this.speed, () => {
+      this.ringSprites1.stop(this.bullet_time || this.revolution)
       this.mode = 'braked_3'
       this.changeMode()
     })
@@ -560,8 +526,8 @@ export class MainScene extends Phaser.Scene {
 
   private brakeRing2(): void {
     this.mode = 'braking_2'
-    this.time.delayedCall(500, () => {
-      this.stopRing(this.ring2Sprites)
+    this.ringSprites2.brake(this.speed, () => {
+      this.ringSprites2.stop(this.bullet_time || this.revolution)
       this.mode = 'braked_2'
       this.changeMode()
     })
@@ -572,35 +538,18 @@ export class MainScene extends Phaser.Scene {
     // Stop rotation sound when braking last ring
     this.audio.playSound('se_stop')
 
-    this.time.delayedCall(500, () => {
-      this.stopRing(this.ring3Sprites)
+    this.ringSprites3.brake(this.speed, () => {
+      this.ringSprites3.stop(this.bullet_time || this.revolution)
       this.mode = 'braked_1'
       this.changeMode()
     })
   }
 
-  private stopRing(sprites: Phaser.GameObjects.Image[]): void {
-    const startY = 300
-    const endY = 300 + 42 * 10
-
-    const eyes: number[] = []
-    sprites.forEach(sprite => {
-      if (sprite.y >= startY && sprite.y < endY) {
-        eyes.push(sprite.getData('n'))
-      }
-    })
-
-    if (sprites === this.ring1Sprites) {
-      this.ring1_eyes = eyes
-    } else if (sprites === this.ring2Sprites) {
-      this.ring2_eyes = eyes
-    } else if (sprites === this.ring3Sprites) {
-      this.ring3_eyes = eyes
-    }
-  }
-
   private checkReach(): void {
-    const reaches = Rule.getReaches(this.ring1_eyes, this.ring2_eyes)
+    const reaches = Rule.getReaches(
+      this.ringSprites1.eyes,
+      this.ringSprites2.eyes
+    )
 
     // Show reach guides
     reaches.forEach(reach => {
@@ -614,7 +563,10 @@ export class MainScene extends Phaser.Scene {
 
     // Check zone reaches (special numbers that trigger zones)
     if (!this.bullet_time && !this.revolution) {
-      const zoneReaches = Rule.getZoneReaches(this.ring1_eyes, this.ring2_eyes)
+      const zoneReaches = Rule.getZoneReaches(
+        this.ringSprites1.eyes,
+        this.ringSprites2.eyes
+      )
       if (zoneReaches.length > 0) {
         this.audio.playSound('se_zone_reach')
       }
@@ -649,9 +601,9 @@ export class MainScene extends Phaser.Scene {
     this.hideGuides()
 
     this.tuples = Rule.calcTuples(
-      this.ring1_eyes,
-      this.ring2_eyes,
-      this.ring3_eyes
+      this.ringSprites1.eyes,
+      this.ringSprites2.eyes,
+      this.ringSprites3.eyes
     )
 
     // Check for zone triggers
@@ -688,7 +640,10 @@ export class MainScene extends Phaser.Scene {
         // Check for rollback (triple seven effect)
         let rollback = false
         if (this.rollbackStock > 0) {
-          const reaches = Rule.getReaches(this.ring1_eyes, this.ring2_eyes)
+          const reaches = Rule.getReaches(
+            this.ringSprites1.eyes,
+            this.ringSprites2.eyes
+          )
           if (reaches.length > 0 && !Rule.isMultiWon(scores)) {
             rollback = true
           }
@@ -726,10 +681,10 @@ export class MainScene extends Phaser.Scene {
     this.audio.playSound('voice_rollback')
     this.stats.triple_seven.rollback++
 
-    // Redraw ring 3 with yellow if stock remains
-    if (this.rollbackStock === 0) {
-      this.ring3_color = this.ring1_color
-    }
+    // Redraw ring 3 with yellow if stock remains, otherwise white
+    const ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    const ring3_color = this.rollbackStock > 0 ? 'yellow' : 'white'
+    this.ringSprites3.redraw(ring3_ns, ring3_color)
 
     // Re-spin ring 3
     this.mode = 'rotate_1'
@@ -762,134 +717,40 @@ export class MainScene extends Phaser.Scene {
 
     this.mode = 'showing_scores'
 
-    // Display scores
-    this.displayScores(scores, this.i_combo, finalScores)
+    // Display scores using new sprite classes
+    this.scoresSprites.show(scores)
+    this.currentScoreSprites.show(finalScores)
 
-    const wait = finalScores[3] !== finalScores[2] ? 1500 : 1000
+    // Play sound effects based on scores
+    if (finalScores[0] > 0) {
+      this.audio.playSound('se_win')
+    }
+    if (finalScores[1] > finalScores[0]) {
+      this.time.delayedCall(500, () => {
+        this.audio.playSound('se_win')
+      })
+    }
+    if (finalScores[2] > finalScores[1]) {
+      this.time.delayedCall(1000, () => {
+        this.audio.playSound('se_multi')
+      })
+    }
+    if (finalScores[3] !== finalScores[2]) {
+      this.time.delayedCall(1500, () => {
+        this.audio.playSound('voice_combo')
+      })
+    }
+
+    const wait = finalScores[3] !== finalScores[2] ? 2000 : 1500
 
     this.time.delayedCall(wait, () => {
+      this.totalScoreSprites.redraw(this.total_score)
       this.totalScoreText.setText(`スコア: ${this.total_score}`)
       this.mode = 'shown_scores'
 
       if (Rule.isAchieved(this.rule, this.elapsed_time, this.total_score)) {
         this.finishGame()
       }
-    })
-  }
-
-  private displayScores(
-    scores: Score[],
-    combo: number,
-    finalScores: number[]
-  ): void {
-    // Clear previous score images
-    this.scoreImages.forEach(img => img.destroy())
-    this.scoreImages = []
-    this.comboImages.forEach(img => img.destroy())
-    this.comboImages = []
-    this.currentScoreImages.forEach(img => img.destroy())
-    this.currentScoreImages = []
-
-    // Display roll names and odds
-    let yOffset = 300
-    scores.forEach(score => {
-      const roll = score.roll as Roll
-      if (roll.won) {
-        const rollImage = this.add.image(520, yOffset, `roll_${roll.name}`)
-        rollImage.setAlpha(0)
-        this.scoreImages.push(rollImage)
-
-        this.tweens.add({
-          targets: rollImage,
-          alpha: 1,
-          duration: 200,
-        })
-
-        // Show odds
-        const oddsType = roll.f === 'multi' ? 'multi' : 'add'
-        const oddsValue = roll.odds || 0
-        const oddsImage = this.add.image(
-          560,
-          yOffset,
-          `odds_${oddsType}_${oddsValue}`
-        )
-        oddsImage.setAlpha(0)
-        this.scoreImages.push(oddsImage)
-
-        this.tweens.add({
-          targets: oddsImage,
-          alpha: 1,
-          duration: 200,
-        })
-
-        yOffset += 40
-      }
-    })
-
-    // Display combo
-    if (combo >= 2) {
-      const comboText = this.add.image(350, 783, 'text_combo')
-      comboText.setAlpha(0)
-      this.comboImages.push(comboText)
-
-      this.tweens.add({
-        targets: comboText,
-        alpha: 1,
-        duration: 200,
-      })
-
-      // Display combo number
-      const comboDigits = combo.toString().split('')
-      let xOffset = 370
-      comboDigits.forEach(digit => {
-        const digitImage = this.add.image(xOffset, 783, `fude_n_${digit}`)
-        digitImage.setAlpha(0)
-        this.comboImages.push(digitImage)
-
-        this.tweens.add({
-          targets: digitImage,
-          alpha: 1,
-          duration: 200,
-        })
-
-        xOffset += 20
-      })
-    }
-
-    // Display current score
-    this.displayNumber(finalScores[3], 520, 790)
-  }
-
-  private displayNumber(num: number, x: number, y: number): void {
-    const digits = num.toString().replace('-', '').split('')
-    let xOffset = x
-
-    if (num < 0) {
-      const minusImage = this.add.image(xOffset, y, 'fude_n_-')
-      minusImage.setAlpha(0)
-      this.currentScoreImages.push(minusImage)
-
-      this.tweens.add({
-        targets: minusImage,
-        alpha: 1,
-        duration: 200,
-      })
-
-      xOffset += 20
-    }
-
-    digits.forEach(digit => {
-      const digitImage = this.add.image(xOffset, y, `fude_n_${digit}`)
-      digitImage.setAlpha(0)
-      this.currentScoreImages.push(digitImage)
-
-      this.tweens.add({
-        targets: digitImage,
-        alpha: 1,
-        duration: 200,
-      })
-
-      xOffset += 20
     })
   }
 
@@ -971,9 +832,8 @@ export class MainScene extends Phaser.Scene {
 
     // Clear game elements
     this.hideGuides()
-    this.scoreImages.forEach(img => img.destroy())
-    this.comboImages.forEach(img => img.destroy())
-    this.currentScoreImages.forEach(img => img.destroy())
+    this.scoresSprites.hide()
+    this.currentScoreSprites.hide()
 
     // Show result overlay
     const resultBg = this.add.rectangle(320, 480, 640, 960, 0x000000, 0.8)
@@ -1019,12 +879,8 @@ export class MainScene extends Phaser.Scene {
   private prepareNextSpin(): void {
     // Clear score displays
     this.hideGuides()
-    this.scoreImages.forEach(img => img.destroy())
-    this.scoreImages = []
-    this.comboImages.forEach(img => img.destroy())
-    this.comboImages = []
-    this.currentScoreImages.forEach(img => img.destroy())
-    this.currentScoreImages = []
+    this.scoresSprites.hide()
+    this.currentScoreSprites.hide()
 
     // Adjust speed based on current score (if not in bullet time)
     if (!this.bullet_time && this.currentScores.length > 0) {
@@ -1039,13 +895,12 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    // Finish zone if time is up
-    if (this.zone_seconds <= 0 && (this.bullet_time || this.revolution)) {
-      this.finishZone()
-    }
-
     // Determine ring color
     let color = 'white'
+    let ring1_ns: number[]
+    let ring2_ns: number[]
+    let ring3_ns: number[]
+
     if (this.currentScores.length > 0) {
       // Check if pink ribbon was won
       const scores = Rule.calcScores(this.tuples, this.mods, this.revolution)
@@ -1063,9 +918,9 @@ export class MainScene extends Phaser.Scene {
         this.audio.playSound('voice_triple_seven')
 
         const effect = Rule.getTripleSevenEffect(this.rollbackStock, this.stats)
-        this.ring1_ns = effect.ring1_ns
-        this.ring2_ns = effect.ring2_ns
-        this.ring3_ns = effect.ring3_ns
+        ring1_ns = effect.ring1_ns
+        ring2_ns = effect.ring2_ns
+        ring3_ns = effect.ring3_ns
         this.rollbackStock = effect.rollback_stock
         // Update stats from effect (merge the records)
         Object.assign(this.stats.roll, effect.stats.roll)
@@ -1075,51 +930,31 @@ export class MainScene extends Phaser.Scene {
         this.stats.max_combo = effect.stats.max_combo
         this.stats.max_gain = effect.stats.max_gain
 
-        this.ring1_color = color
-        this.ring2_color = color
-        this.ring3_color = this.rollbackStock > 0 ? 'yellow' : color
+        const ring3_color = this.rollbackStock > 0 ? 'yellow' : color
+        this.ringSprites1.redraw(ring1_ns, color)
+        this.ringSprites2.redraw(ring2_ns, color)
+        this.ringSprites3.redraw(ring3_ns, ring3_color)
       } else {
         // Normal shuffle
-        this.ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        this.ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        this.ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
-        this.ring1_color = color
-        this.ring2_color = color
-        this.ring3_color = color
+        this.ringSprites1.redraw(ring1_ns, color)
+        this.ringSprites2.redraw(ring2_ns, color)
+        this.ringSprites3.redraw(ring3_ns, color)
       }
     } else {
       // First spin
-      this.ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-      this.ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-      this.ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    }
+      ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+      ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+      ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
-    this.redrawRing(this.ring1Sprites, this.ring1_ns, this.ring1_color)
-    this.redrawRing(this.ring2Sprites, this.ring2_ns, this.ring2_color)
-    this.redrawRing(this.ring3Sprites, this.ring3_ns, this.ring3_color)
-
-    // Change background every 1000 points
-    const newBgIndex = Math.floor(this.total_score / 1000)
-    if (newBgIndex !== this.bgIndex && newBgIndex >= 0) {
-      this.bgIndex = newBgIndex
-      const bgNum = (this.bgIndex % 37) + 1
-      this.bgSprite.setTexture(`bg_${bgNum}`)
+      this.ringSprites1.redraw(ring1_ns, color)
+      this.ringSprites2.redraw(ring2_ns, color)
+      this.ringSprites3.redraw(ring3_ns, color)
     }
 
     this.startRotation()
-  }
-
-  private redrawRing(
-    sprites: Phaser.GameObjects.Image[],
-    ns: number[],
-    color: string
-  ): void {
-    sprites.forEach((sprite, i) => {
-      const i2 = i % 10
-      const n = ns[i2]
-      sprite.setTexture(`${color}_n_${n}`)
-      sprite.setData('n', n)
-    })
   }
 }
