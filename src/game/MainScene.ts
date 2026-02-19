@@ -46,7 +46,7 @@ export class MainScene extends Phaser.Scene {
   private elapsed_time: number = 0
   private bet_times: number = 0
   private total_score: number = 0
-  private audio!: AudioManager
+  public audio!: AudioManager
   private backButton!: Phaser.GameObjects.Image
   private preventClick = false
   private keyWait = false

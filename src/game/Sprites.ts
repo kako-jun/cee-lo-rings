@@ -28,6 +28,8 @@ export class RingSprites {
   private ringPattern: RingPattern
   private ringPatternOld: RingPattern
 
+  private position: 'left' | 'center' | 'right'
+
   constructor(
     scene: MainScene,
     x: number,
@@ -37,7 +39,7 @@ export class RingSprites {
     this.scene = scene
     this.x = x
     this.y = y
-    void position
+    this.position = position
     this.ringPattern = { ...this.ringPatternNew }
     this.ringPatternOld = { ...this.ringPattern }
   }
@@ -132,8 +134,21 @@ export class RingSprites {
     })
 
     if (isZone) {
+      switch (this.position) {
+        case 'left':
+          this.scene.audio.playSound('voice_chin')
+          break
+        case 'center':
+          this.scene.audio.playSound('voice_chiro')
+          break
+        case 'right':
+          this.scene.audio.playSound('voice_rin')
+          break
+      }
       this.basicAlpha = 0.5
       this.sprites.forEach(sprite => this.transform(sprite))
+    } else {
+      this.scene.audio.playSound('se_stop')
     }
   }
 
@@ -330,30 +345,44 @@ export class BackgroundSprites {
 
   private startAnime(): void {
     this.createRotationAnimation()
-    this.scene.tweens.add({
-      targets: this.sprite,
-      scaleX: { from: 1, to: 1.5 },
-      scaleY: { from: 1, to: 1.5 },
-      duration: 40000,
-      ease: 'Quad.easeInOut',
-      yoyo: true,
-      repeat: -1,
-    })
+    // phina: .to({ scaleX: 1.5 }, 40000).to({ scaleX: 1 }, 80000) — asymmetric
+    const doScale = () => {
+      this.scene.tweens.add({
+        targets: this.sprite,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        duration: 40000,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: this.sprite,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 80000,
+            ease: 'Quad.easeInOut',
+            onComplete: doScale,
+          })
+        },
+      })
+    }
+    doScale()
     this.createPositionAnimation()
   }
 
   private createRotationAnimation(): void {
+    // phina: .by({ rotation: -60 }, 80000).by({ rotation: 90 }, 80000)...
+    // Using relative increments to match phina's .by() behavior
     const rotations = [
-      { angle: -60, duration: 80000 },
-      { angle: 30, duration: 80000 },
-      { angle: 90, duration: 40000 },
-      { angle: 0, duration: 40000 },
+      { delta: -60, duration: 80000 },
+      { delta: 90, duration: 80000 },
+      { delta: 60, duration: 40000 },
+      { delta: -90, duration: 40000 },
     ]
     const doRotation = (index: number) => {
       const rot = rotations[index]
       this.scene.tweens.add({
         targets: this.sprite,
-        rotation: Phaser.Math.DegToRad(rot.angle),
+        rotation: `+=${Phaser.Math.DegToRad(rot.delta)}`,
         duration: rot.duration,
         ease: 'Quad.easeInOut',
         onComplete: () => doRotation((index + 1) % rotations.length),
@@ -363,18 +392,20 @@ export class BackgroundSprites {
   }
 
   private createPositionAnimation(): void {
+    // phina: .by({ x: -50, y: 0 }, 10000).by({ x: 0, y: -50 }, 10000)...
+    // Using relative increments to match phina's .by() behavior
     const movements = [
-      { x: 270, y: 480, d: 10000 },
-      { x: 270, y: 430, d: 10000 },
-      { x: 320, y: 430, d: 10000 },
-      { x: 320, y: 480, d: 10000 },
+      { dx: -50, dy: 0, d: 10000 },
+      { dx: 0, dy: -50, d: 10000 },
+      { dx: 50, dy: 0, d: 10000 },
+      { dx: 0, dy: 50, d: 10000 },
     ]
     const doMove = (index: number) => {
       const m = movements[index]
       this.scene.tweens.add({
         targets: this.sprite,
-        x: m.x,
-        y: m.y,
+        x: `+=${m.dx}`,
+        y: `+=${m.dy}`,
         duration: m.d,
         ease: 'Quad.easeInOut',
         onComplete: () => doMove((index + 1) % movements.length),
@@ -396,8 +427,9 @@ export class KanjiSprites {
   constructor(scene: Phaser.Scene) {
     this.scene = scene
     this.currentIndex = Math.floor(Math.random() * 35) + 1
-    this.sprite = scene.add.image(320, 480, `kanji_${this.currentIndex}`)
-    this.sprite.setAlpha(0.2)
+    // phina: x=0, y=960, alpha=0
+    this.sprite = scene.add.image(0, 960, `kanji_${this.currentIndex}`)
+    this.sprite.setAlpha(0)
     this.sprite.setDepth(-8)
     this.startAnime()
   }
@@ -409,15 +441,27 @@ export class KanjiSprites {
 
   private startAnime(): void {
     this.createRotationAnimation()
-    this.scene.tweens.add({
-      targets: this.sprite,
-      scaleX: { from: 2, to: 3 },
-      scaleY: { from: 2, to: 3 },
-      duration: 20000,
-      ease: 'Quad.easeInOut',
-      yoyo: true,
-      repeat: -1,
-    })
+    // phina: .to({ scaleX: 2 }, 20000).to({ scaleX: 3 }, 20000) — 2→3→2→3 loop
+    const doScale = () => {
+      this.scene.tweens.add({
+        targets: this.sprite,
+        scaleX: 2,
+        scaleY: 2,
+        duration: 20000,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: this.sprite,
+            scaleX: 3,
+            scaleY: 3,
+            duration: 20000,
+            ease: 'Quad.easeInOut',
+            onComplete: doScale,
+          })
+        },
+      })
+    }
+    doScale()
     this.createPositionAnimation()
     this.createOpacityAnimation()
   }
@@ -522,8 +566,9 @@ export class MonSprites {
   constructor(scene: Phaser.Scene) {
     this.scene = scene
     this.currentIndex = Math.floor(Math.random() * 14) + 1
-    this.sprite = scene.add.image(320, 480, `mon_${this.currentIndex}`)
-    this.sprite.setAlpha(0.2)
+    // phina: x=640, y=0, alpha=0
+    this.sprite = scene.add.image(640, 0, `mon_${this.currentIndex}`)
+    this.sprite.setAlpha(0)
     this.sprite.setDepth(-9)
     this.startAnime()
   }
@@ -535,15 +580,27 @@ export class MonSprites {
 
   private startAnime(): void {
     this.createRotationAnimation()
-    this.scene.tweens.add({
-      targets: this.sprite,
-      scaleX: { from: 1, to: 1.5 },
-      scaleY: { from: 1, to: 1.5 },
-      duration: 5000,
-      ease: 'Quad.easeInOut',
-      yoyo: true,
-      repeat: -1,
-    })
+    // phina: .to({ scaleX: 1.5 }, 5000).to({ scaleX: 1 }, 10000) — asymmetric
+    const doScale = () => {
+      this.scene.tweens.add({
+        targets: this.sprite,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        duration: 5000,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          this.scene.tweens.add({
+            targets: this.sprite,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 10000,
+            ease: 'Quad.easeInOut',
+            onComplete: doScale,
+          })
+        },
+      })
+    }
+    doScale()
     this.createPositionAnimation()
     this.createOpacityAnimation()
   }
@@ -824,10 +881,10 @@ export class GuidesSprites {
 }
 
 export class ModsSprites {
-  private scene: Phaser.Scene
+  private scene: MainScene
   private sprites: Phaser.GameObjects.Image[] = []
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: MainScene, x: number, y: number) {
     this.scene = scene
     for (let i = 0; i < 11; i++) {
       let sx: number, sy: number
@@ -856,6 +913,9 @@ export class ModsSprites {
         alpha: 1,
         duration: 50,
       })
+    // First group SE (immediate)
+    this.scene.audio.playSound('se_mod')
+
     for (let i = 5; i <= 7; i++)
       this.scene.tweens.add({
         targets: this.sprites[i],
@@ -863,6 +923,9 @@ export class ModsSprites {
         duration: 50,
         delay: 400,
       })
+    // Second group SE (400ms)
+    this.scene.time.delayedCall(400, () => this.scene.audio.playSound('se_mod'))
+
     for (let i = 8; i <= 10; i++)
       this.scene.tweens.add({
         targets: this.sprites[i],
@@ -870,6 +933,8 @@ export class ModsSprites {
         duration: 50,
         delay: 800,
       })
+    // Third group SE (800ms)
+    this.scene.time.delayedCall(800, () => this.scene.audio.playSound('se_mod'))
   }
 
   hide(): void {
@@ -1121,6 +1186,8 @@ export class CurrentScoreSprites {
   }
 
   private show(currentScores: number[]): void {
+    const audio = (this.scene as MainScene).audio
+
     this.meSprites.forEach(s => {
       this.scene.tweens.add({
         targets: s,
@@ -1132,6 +1199,14 @@ export class CurrentScoreSprites {
           ),
       })
     })
+
+    // me score SE
+    if (currentScores[0] > 0) {
+      audio.playSound('se_win')
+    } else {
+      audio.playSound('se_buta')
+    }
+
     this.kabuSprites.forEach(s => {
       this.scene.tweens.add({
         targets: s,
@@ -1144,6 +1219,14 @@ export class CurrentScoreSprites {
           ),
       })
     })
+
+    // kabu score SE
+    if (currentScores[1] > currentScores[0]) {
+      this.scene.time.delayedCall(500, () => audio.playSound('se_win'))
+    } else {
+      this.scene.time.delayedCall(500, () => audio.playSound('se_buta'))
+    }
+
     if (currentScores[3] !== currentScores[2]) {
       this.multiSprites.forEach(s => {
         this.scene.tweens.add({
@@ -1165,6 +1248,18 @@ export class CurrentScoreSprites {
           delay: 1500,
         })
       )
+
+      // multi score SE
+      if (currentScores[2] > currentScores[1]) {
+        this.scene.time.delayedCall(1000, () => audio.playSound('se_multi'))
+      } else if (currentScores[2] === currentScores[1]) {
+        this.scene.time.delayedCall(1000, () => audio.playSound('se_buta'))
+      } else {
+        this.scene.time.delayedCall(1000, () => audio.playSound('se_hifumi'))
+      }
+
+      // combo voice
+      this.scene.time.delayedCall(1500, () => audio.playSound('voice_combo'))
     } else {
       this.multiSprites.forEach(s =>
         this.scene.tweens.add({
@@ -1174,6 +1269,15 @@ export class CurrentScoreSprites {
           delay: 1000,
         })
       )
+
+      // multi score SE (no combo)
+      if (currentScores[2] > currentScores[1]) {
+        this.scene.time.delayedCall(1000, () => audio.playSound('se_multi'))
+      } else if (currentScores[2] === currentScores[1]) {
+        this.scene.time.delayedCall(1000, () => audio.playSound('se_buta'))
+      } else {
+        this.scene.time.delayedCall(1000, () => audio.playSound('se_hifumi'))
+      }
     }
   }
 
