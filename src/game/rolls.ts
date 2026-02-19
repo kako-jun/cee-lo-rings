@@ -100,7 +100,7 @@ export const RollTableMulti: Roll[] = [
   },
   {
     name: 'hifumi',
-    desc: '123',
+    desc: '',
     rule: 'chinchirorin',
     f: 'multi',
     odds: -2,

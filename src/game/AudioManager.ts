@@ -1,15 +1,15 @@
 // Audio management for Tin! Tilo! Rings!
+// Matches original audio.js: se_rotate loops alongside main BGM, changeBGM cycles 1->2->3->4->1
 
 export class AudioManager {
   private scene: Phaser.Scene
-  private bgmTracks: Map<string, Phaser.Sound.BaseSound>
-  private sounds: Map<string, Phaser.Sound.BaseSound>
-  private currentBGM: string | null = null
+  private currentMainBGMId: string = 'bgm_1'
+  private mainBGM: Phaser.Sound.BaseSound | null = null
+  private seRotate: Phaser.Sound.BaseSound | null = null
+  private resultBGM: Phaser.Sound.BaseSound | null = null
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene
-    this.bgmTracks = new Map()
-    this.sounds = new Map()
   }
 
   preload(): void {
@@ -23,10 +23,15 @@ export class AudioManager {
     // Sound effects
     this.scene.load.audio('se_start', 'assets/sound/se_start.ogg')
     this.scene.load.audio('se_rotate', 'assets/sound/se_rotate.ogg')
+    this.scene.load.audio('se_stop', 'assets/sound/se_stop.ogg')
     this.scene.load.audio('se_select_rule', 'assets/sound/se_select_rule.ogg')
     this.scene.load.audio('se_zone_reach', 'assets/sound/se_zone_reach.ogg')
     this.scene.load.audio('se_ambulance', 'assets/sound/se_ambulance.ogg')
     this.scene.load.audio('se_mod', 'assets/sound/se_mod.ogg')
+    this.scene.load.audio('se_win', 'assets/sound/se_win.ogg')
+    this.scene.load.audio('se_buta', 'assets/sound/se_buta.ogg')
+    this.scene.load.audio('se_multi', 'assets/sound/se_multi.ogg')
+    this.scene.load.audio('se_hifumi', 'assets/sound/se_hifumi.ogg')
     this.scene.load.audio('se_speed_up', 'assets/sound/se_speed_up.ogg')
     this.scene.load.audio('se_speed_down', 'assets/sound/se_speed_down.ogg')
     this.scene.load.audio(
@@ -42,9 +47,6 @@ export class AudioManager {
       'assets/sound/se_finish_revolution.ogg'
     )
 
-    // Additional sound effects
-    this.scene.load.audio('se_stop', 'assets/sound/se_stop.ogg')
-
     // Voice clips
     this.scene.load.audio('voice_chin', 'assets/sound/voice_chin.ogg')
     this.scene.load.audio('voice_chiro', 'assets/sound/voice_chiro.ogg')
@@ -52,6 +54,19 @@ export class AudioManager {
     this.scene.load.audio('voice_info', 'assets/sound/voice_info.ogg')
     this.scene.load.audio('voice_back', 'assets/sound/voice_back.ogg')
     this.scene.load.audio('voice_rollback', 'assets/sound/voice_rollback.ogg')
+    this.scene.load.audio('voice_combo', 'assets/sound/voice_combo.ogg')
+    this.scene.load.audio('voice_result', 'assets/sound/voice_result.ogg')
+    this.scene.load.audio(
+      'voice_result_negi',
+      'assets/sound/voice_result_negi.ogg'
+    )
+    this.scene.load.audio(
+      'voice_result_high_score',
+      'assets/sound/voice_result_high_score.ogg'
+    )
+    this.scene.load.audio('voice_one_more', 'assets/sound/voice_one_more.ogg')
+    this.scene.load.audio('voice_ok', 'assets/sound/voice_ok.ogg')
+    this.scene.load.audio('voice_ranking', 'assets/sound/voice_ranking.ogg')
     this.scene.load.audio('voice_rule_2943', 'assets/sound/voice_rule_2943.ogg')
     this.scene.load.audio('voice_rule_8390', 'assets/sound/voice_rule_8390.ogg')
     this.scene.load.audio(
@@ -88,86 +103,104 @@ export class AudioManager {
     )
   }
 
+  /**
+   * Play a BGM track. Matches original Audio.playBGM behavior:
+   * - bgm_* tracks: stop other bgm_* first, then play with loop
+   * - se_rotate: plays alongside bgm_* (doesn't stop main BGM)
+   * - bgm_result: stops everything, plays result music
+   */
   playBGM(key: string, volume: number = 0.2): void {
-    // Stop current BGM
-    if (this.currentBGM && this.bgmTracks.has(this.currentBGM)) {
-      const current = this.bgmTracks.get(this.currentBGM)
-      if (current) {
-        current.stop()
-      }
-    }
-
-    // Play new BGM
-    if (!this.bgmTracks.has(key)) {
-      const bgm = this.scene.sound.add(key, { loop: true, volume })
-      this.bgmTracks.set(key, bgm)
-    }
-
-    const bgm = this.bgmTracks.get(key)
-    if (bgm) {
-      bgm.play()
-      this.currentBGM = key
+    if (key === 'se_rotate') {
+      // se_rotate loops alongside main BGM (original: length=2000ms loop)
+      if (this.seRotate) this.seRotate.stop()
+      this.seRotate = this.scene.sound.add(key, { loop: true, volume })
+      this.seRotate.play()
+    } else if (key === 'bgm_result') {
+      // Result BGM: stop everything first
+      this.stopAllBGM()
+      this.resultBGM = this.scene.sound.add(key, { loop: true, volume })
+      this.resultBGM.play()
+    } else if (key.startsWith('bgm_')) {
+      // Main BGM: stop current main BGM, keep se_rotate
+      if (this.mainBGM) this.mainBGM.stop()
+      this.mainBGM = this.scene.sound.add(key, { loop: true, volume })
+      this.mainBGM.play()
+      this.currentMainBGMId = key
     }
   }
 
+  /**
+   * Stop a specific BGM or all BGMs.
+   * Original: Audio.stopBGM(id) stops only that id.
+   */
   stopBGM(key?: string): void {
-    if (key) {
-      const bgm = this.bgmTracks.get(key)
-      if (bgm) {
-        bgm.stop()
+    if (key === 'se_rotate') {
+      if (this.seRotate) {
+        this.seRotate.stop()
+        this.seRotate = null
       }
-      if (this.currentBGM === key) {
-        this.currentBGM = null
+    } else if (key) {
+      // Stop a specific main BGM
+      if (this.mainBGM && this.currentMainBGMId === key) {
+        this.mainBGM.stop()
+        this.mainBGM = null
+      }
+      if (this.resultBGM && key === 'bgm_result') {
+        this.resultBGM.stop()
+        this.resultBGM = null
       }
     } else {
-      // Stop all BGM
-      this.bgmTracks.forEach(bgm => bgm.stop())
-      this.currentBGM = null
+      // Stop all
+      this.stopAllBGM()
+    }
+  }
+
+  /** Stop all BGM tracks. Matches original Audio.stopAllBGM. */
+  stopAllBGM(): void {
+    if (this.mainBGM) {
+      this.mainBGM.stop()
+      this.mainBGM = null
+    }
+    if (this.seRotate) {
+      this.seRotate.stop()
+      this.seRotate = null
+    }
+    if (this.resultBGM) {
+      this.resultBGM.stop()
+      this.resultBGM = null
     }
   }
 
   playSound(key: string, volume: number = 1): void {
-    if (!this.sounds.has(key)) {
-      const sound = this.scene.sound.add(key, { volume })
-      this.sounds.set(key, sound)
-    }
-
-    const sound = this.sounds.get(key)
-    if (sound) {
-      sound.play()
+    try {
+      this.scene.sound.play(key, { volume })
+    } catch {
+      // Gracefully handle missing audio files
     }
   }
 
+  /**
+   * Cycle to next BGM. Original: increments 1->2->3->4->1.
+   * Uses separate tracking (currentMainBGMId) independent of what's currently playing.
+   */
   changeBGM(): void {
-    if (!this.currentBGM) return
+    let n = parseInt(this.currentMainBGMId.split('_')[1])
+    n++
+    if (n > 4) n = 1
 
-    const match = this.currentBGM.match(/bgm_(\d+)/)
-    if (!match) return
-
-    let num = parseInt(match[1])
-    num = (num % 4) + 1
-
-    this.playBGM(`bgm_${num}`, 0.2)
+    const id = `bgm_${n}`
+    this.currentMainBGMId = id
+    this.playBGM(id, 0.2)
   }
 
+  /** Change volume of main BGM tracks only. Original: only affects bgm_1-4. */
   changeBGMVolume(volume: number): void {
-    // Change volume of current BGM
-    if (this.currentBGM && this.bgmTracks.has(this.currentBGM)) {
-      const bgm = this.bgmTracks.get(this.currentBGM)
-      if (bgm && 'setVolume' in bgm) {
-        ;(
-          bgm as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound
-        ).setVolume(volume)
-      }
+    if (this.mainBGM && 'setVolume' in this.mainBGM) {
+      ;(
+        this.mainBGM as
+          | Phaser.Sound.WebAudioSound
+          | Phaser.Sound.HTML5AudioSound
+      ).setVolume(volume)
     }
-
-    // Change volume for all BGM tracks
-    this.bgmTracks.forEach(bgm => {
-      if ('setVolume' in bgm) {
-        ;(
-          bgm as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound
-        ).setVolume(volume)
-      }
-    })
   }
 }

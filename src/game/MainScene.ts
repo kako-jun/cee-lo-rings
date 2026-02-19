@@ -1,8 +1,7 @@
 // Main Game Scene for Tin! Tilo! Rings!
 // Complete port from Phina.js version
 import Phaser from 'phaser'
-import { Rule, RuleType, type Score } from './rule'
-import { type Roll } from './rolls'
+import { Rule, RuleType, type Score, type GameStats } from './rule'
 import { AudioManager } from './AudioManager'
 import {
   RingSprites,
@@ -12,6 +11,15 @@ import {
   ScoresSprites,
   CurrentScoreSprites,
   TotalScoreSprites,
+  LinesSprites,
+  GuidesSprites,
+  ModsSprites,
+  AlphabetsSprites,
+  ComboSprites,
+  EffectSprites,
+  BetTimesSprites,
+  TimeSprites,
+  ResultSprites,
 } from './Sprites'
 
 type GameMode =
@@ -30,6 +38,7 @@ type GameMode =
   | 'showing_scores'
   | 'shown_scores'
   | 'shown_result'
+  | 'input_name'
 
 export class MainScene extends Phaser.Scene {
   private mode: GameMode = 'first'
@@ -40,53 +49,56 @@ export class MainScene extends Phaser.Scene {
   private audio!: AudioManager
   private backButton!: Phaser.GameObjects.Image
   private preventClick = false
+  private keyWait = false
 
   private speed: number = 4
+  private speed_bk: number = 4
 
   private i_combo: number = 0
+  private i_score_1000: number = 0
   private i_second_1: number = 0
   private i_minute_1: number = 0
 
+  private reserve_change_BGM: boolean = false
+  private reserve_start_zone: boolean = false
+  private reserve_finish_zone: boolean = false
   private zone_seconds: number = 0
   private bullet_time: boolean = false
   private revolution: boolean = false
+  private rollback_stock: number = 0
 
-  // Ring sprites - using new sprite classes
+  // Ring sprites
   private ringSprites1!: RingSprites
   private ringSprites2!: RingSprites
   private ringSprites3!: RingSprites
 
   // Decorative sprites
   private backgroundSprites!: BackgroundSprites
-  private kanjiSprites!: KanjiSprites
-  private monSprites!: MonSprites
 
   // Score display sprites
   private scoresSprites!: ScoresSprites
   private currentScoreSprites!: CurrentScoreSprites
   private totalScoreSprites!: TotalScoreSprites
 
-  // UI elements
-  private totalScoreText!: Phaser.GameObjects.Text
-  private timeText!: Phaser.GameObjects.Text
-  private betTimesText!: Phaser.GameObjects.Text
-
-  // Guide sprites
-  private guideSprites: Map<string, Phaser.GameObjects.Image> = new Map()
-
-  // Effect sprites
-  private effectSprite: Phaser.GameObjects.Image | null = null
+  // Sprite classes for UI elements
+  private linesSprites!: LinesSprites
+  private guidesSprites!: GuidesSprites
+  private modsSprites!: ModsSprites
+  private alphabetsSprites!: AlphabetsSprites
+  private comboSprites!: ComboSprites
+  private effectSprites!: EffectSprites
+  private betTimesSprites!: BetTimesSprites
+  private timeSprites!: TimeSprites
+  private resultSprites!: ResultSprites
 
   // Scores for current round
-  private currentScores: number[] = []
+  private scores: Score[] = []
+  private current_scores: number[] = []
   private tuples: number[][] = []
   private mods: number[] = []
 
-  // Rollback for triple seven
-  private rollbackStock: number = 0
-
   // Stats
-  private stats = {
+  private stats: GameStats = {
     max_combo: 0,
     max_gain: 0,
     roll: {
@@ -134,14 +146,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   init(data: { rule?: string }): void {
-    // Get rule from title scene
     if (data.rule) {
       this.rule = data.rule as RuleType
     }
   }
 
   preload(): void {
-    // Initialize audio manager
     this.audio = new AudioManager(this)
     this.audio.preload()
 
@@ -180,11 +190,6 @@ export class MainScene extends Phaser.Scene {
     this.load.image('guide_mod_f', 'assets/image/guide/guide_mod_f.png')
     this.load.image('guide_mod_i', 'assets/image/guide/guide_mod_i.png')
 
-    // Load score images
-    this.load.image('roll_pinzoro', 'assets/image/score/roll_pinzoro.png')
-    this.load.image('roll_arashikabu', 'assets/image/score/roll_arashikabu.png')
-    // ... more score images
-
     // Load score roll images
     const rollNames = [
       'pinzoro',
@@ -210,6 +215,7 @@ export class MainScene extends Phaser.Scene {
     rollNames.forEach(name => {
       this.load.image(`roll_${name}`, `assets/image/score/roll_${name}.png`)
     })
+    this.load.image('roll_buta', 'assets/image/score/roll_buta.png')
 
     // Load odds images
     for (let i = 1; i <= 10; i++) {
@@ -253,17 +259,17 @@ export class MainScene extends Phaser.Scene {
     )
     this.load.image('effect_hand', 'assets/image/effect/effect_hand.png')
 
-    // Load kanji images (decorative Japanese characters)
+    // Load kanji images
     for (let i = 1; i <= 35; i++) {
       this.load.image(`kanji_${i}`, `assets/image/kanji/kanji_${i}.png`)
     }
 
-    // Load mon images (decorative emblems)
+    // Load mon images
     for (let i = 1; i <= 14; i++) {
       this.load.image(`mon_${i}`, `assets/image/mon/mon_${i}.png`)
     }
 
-    // Load line images (visual separators)
+    // Load line images
     this.load.image('line_h_1', 'assets/image/line/line_h_1.png')
     this.load.image('line_h_2', 'assets/image/line/line_h_2.png')
     this.load.image('line_h_3', 'assets/image/line/line_h_3.png')
@@ -274,23 +280,64 @@ export class MainScene extends Phaser.Scene {
       this.load.image(`mod_n_${i}`, `assets/image/mod/mod_n_${i}.png`)
     }
 
-    // Load dummy image (used for placeholder)
+    // Load result images
+    this.load.image('bg_result', 'assets/image/result/bg_result.png')
+    this.load.image('high_score', 'assets/image/result/high_score.png')
+    this.load.image(
+      'button_change_rule',
+      'assets/image/result/button_change_rule.png'
+    )
+    this.load.image(
+      'button_one_more',
+      'assets/image/result/button_one_more.png'
+    )
+    this.load.image('button_send', 'assets/image/result/button_send.png')
+    this.load.image('button_ranking', 'assets/image/result/button_ranking.png')
+    this.load.image(
+      'button_change_rule_hover',
+      'assets/image/result/button_change_rule_hover.png'
+    )
+    this.load.image(
+      'button_one_more_hover',
+      'assets/image/result/button_one_more_hover.png'
+    )
+    this.load.image(
+      'button_send_hover',
+      'assets/image/result/button_send_hover.png'
+    )
+    this.load.image(
+      'button_ranking_hover',
+      'assets/image/result/button_ranking_hover.png'
+    )
+
+    // Load rule images (used in ResultSprites)
+    const ruleNames = [
+      'rule_1_2943',
+      'rule_1_8390',
+      'rule_1_37654',
+      'rule_2_2943',
+      'rule_2_8390',
+      'rule_2_37654',
+      'rule_3_0409',
+      'rule_3_2009',
+      'rule_3_6819',
+    ]
+    ruleNames.forEach(name => {
+      this.load.image(name, `assets/image/title/${name}.png`)
+    })
+
+    // Load dummy image
     this.load.image('dummy', 'assets/image/dummy.png')
   }
 
   create(): void {
-    // Set background color
     this.cameras.main.setBackgroundColor('#732121')
 
-    // Create decorative sprites (background animations)
-    // These sprites are created for decorative animated background effects
+    // Create decorative sprites (kanji/mon are self-animated, just need to exist)
     this.backgroundSprites = new BackgroundSprites(this)
-    this.kanjiSprites = new KanjiSprites(this)
-    this.monSprites = new MonSprites(this)
-    // Mark as intentionally used for side effects
-    void this.backgroundSprites
-    void this.kanjiSprites
-    void this.monSprites
+    new KanjiSprites(this)
+    new MonSprites(this)
+    this.backgroundSprites.change(0, this.rule)
 
     // Create ring sprites
     this.ringSprites1 = new RingSprites(this, 100, 300, 'left')
@@ -299,8 +346,19 @@ export class MainScene extends Phaser.Scene {
 
     // Create score display sprites
     this.scoresSprites = new ScoresSprites(this, 520, 300)
-    this.currentScoreSprites = new CurrentScoreSprites(this, 520, 790)
+    this.currentScoreSprites = new CurrentScoreSprites(this, 645, 790)
     this.totalScoreSprites = new TotalScoreSprites(this, 245, 925)
+
+    // Create UI sprite classes
+    this.linesSprites = new LinesSprites(this)
+    this.guidesSprites = new GuidesSprites(this, 155, 382)
+    this.modsSprites = new ModsSprites(this, 155, 382)
+    this.alphabetsSprites = new AlphabetsSprites(this, 335, 300)
+    this.comboSprites = new ComboSprites(this, 350, 783)
+    this.effectSprites = new EffectSprites(this)
+    this.betTimesSprites = new BetTimesSprites(this, 245, 60)
+    this.timeSprites = new TimeSprites(this, 245, 17)
+    this.resultSprites = new ResultSprites(this)
 
     // Create back button
     this.backButton = this.add.image(34, 30, 'button_back')
@@ -324,95 +382,105 @@ export class MainScene extends Phaser.Scene {
 
       this.preventClick = true
       this.audio.stopBGM()
-
-      // Return to title scene
       this.scene.start('TitleScene', { back: true })
     })
 
-    // UI Text
-    this.totalScoreText = this.add
-      .text(245, 925, `スコア: ${this.total_score}`, {
-        fontSize: '24px',
-        color: '#FFFFFF',
-      })
-      .setOrigin(0.5)
-      .setDepth(10)
-
-    this.timeText = this.add
-      .text(245, 17, `時間: 0`, {
-        fontSize: '20px',
-        color: '#FFFFFF',
-      })
-      .setOrigin(0.5)
-      .setDepth(10)
-
-    this.betTimesText = this.add
-      .text(245, 60, `回数: 0`, {
-        fontSize: '20px',
-        color: '#FFFFFF',
-      })
-      .setOrigin(0.5)
-      .setDepth(10)
-
-    // Input
+    // Keyboard input - matches original's keydown handling with key_wait debounce
     this.input.keyboard?.on('keydown-SPACE', () => {
-      if (!this.preventClick) {
+      if (!this.keyWait) {
+        this.keyWait = true
+        this.time.delayedCall(200, () => {
+          this.keyWait = false
+        })
         this.changeMode()
       }
     })
 
+    // Mouse/touch input - matches original's onclick with mode filtering
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.preventClick) return
+
       // Ignore clicks on back button
       if (
-        !this.preventClick &&
-        !Phaser.Geom.Rectangle.Contains(
+        Phaser.Geom.Rectangle.Contains(
           this.backButton.getBounds(),
           pointer.x,
           pointer.y
         )
       ) {
-        this.changeMode()
+        return
       }
+
+      // Original onclick filtering: these modes ignore clicks
+      switch (this.mode) {
+        case 'first':
+        case 'ready':
+        case 'braking_3':
+        case 'braked_3':
+        case 'braking_2':
+        case 'braked_2':
+        case 'braking_1':
+        case 'braked_1':
+        case 'showing_mods':
+        case 'showing_scores':
+        case 'shown_result':
+        case 'input_name':
+          return
+      }
+
+      this.changeMode()
     })
 
-    // Start game
+    // Start game after 1 second delay (matches original)
+    // NOTE: BGM is NOT started here. It starts at ready->rotate_3 transition.
     this.time.delayedCall(1000, () => {
-      // Play BGM
-      this.audio.playBGM('bgm_1', 0.2)
       this.changeMode()
     })
   }
 
   update(_time: number, delta: number): void {
-    // Update elapsed time
-    if (!['first', 'ready', 'shown_result'].includes(this.mode)) {
-      this.elapsed_time += delta
+    // Update elapsed time - matches original's update switch
+    switch (this.mode) {
+      case 'first':
+      case 'ready':
+      case 'shown_result':
+      case 'input_name':
+        break
+      default: {
+        this.elapsed_time += delta
 
-      const second = Math.floor(this.elapsed_time / 1000)
-      const iSecond1 = Math.floor(second)
-      if (iSecond1 !== this.i_second_1) {
-        this.i_second_1 = iSecond1
-        this.timeText.setText(
-          `時間: ${Rule.getTime(this.rule, this.i_second_1)}`
-        )
+        const second = Math.floor(this.elapsed_time / 1000)
+        const iSecond1 = Math.floor(second)
+        if (iSecond1 !== this.i_second_1) {
+          this.i_second_1 = iSecond1
 
-        if (this.bullet_time || this.revolution) {
-          if (this.zone_seconds > 0) {
-            this.zone_seconds--
-            // TODO: Implement zone finish
+          // Update time display
+          const timeValue = Rule.getTime(this.rule, this.i_second_1)
+
+          this.timeSprites.redraw(timeValue)
+
+          // Zone countdown
+          if (this.bullet_time || this.revolution) {
+            if (this.zone_seconds > 0) {
+              this.zone_seconds--
+
+              if (this.zone_seconds <= 0) {
+                this.reserve_finish_zone = true
+              }
+            }
           }
         }
-      }
 
-      const iMinute1 = Math.floor(second / 60)
-      if (iMinute1 > this.i_minute_1) {
-        this.i_minute_1 = iMinute1
-        // Change BGM every minute
-        this.audio.changeBGM()
+        const iMinute1 = Math.floor(second / 60)
+        if (iMinute1 > this.i_minute_1) {
+          this.i_minute_1 = iMinute1
+          this.reserve_change_BGM = true
+        }
+        break
       }
     }
 
-    // Update ring rotations using new sprite classes
+    // Update ring rotations - matches original's second switch
     switch (this.mode) {
       case 'rotate_3':
         this.ringSprites1.rotate(this.speed)
@@ -435,51 +503,77 @@ export class MainScene extends Phaser.Scene {
         break
     }
 
-    // Finish zone if time is up
-    if (this.zone_seconds <= 0 && (this.bullet_time || this.revolution)) {
-      this.finishZone()
-    }
+    // NOTE: Zone finish is handled via reserve_finish_zone flag in shown_scores,
+    // NOT by checking zone_seconds in update(). This prevents duplicate calls.
   }
 
+  /**
+   * Central state machine - matches original changeMode() exactly.
+   * All state transitions go through here.
+   */
   private changeMode(): void {
     switch (this.mode) {
       case 'first':
-        this.startReady()
+        this.onFirst()
         break
       case 'ready':
-        this.startRotation()
+        this.onReady()
         break
       case 'rotate_3':
-        this.brakeRing1()
+        this.mode = 'braking_3'
+        this.onBraking3()
+        break
+      case 'braking_3':
+        // Already braking, ignore
         break
       case 'braked_3':
-        this.mode = 'rotate_2'
+        this.onBraked3()
         break
       case 'rotate_2':
-        this.brakeRing2()
+        this.mode = 'braking_2'
+        this.onBraking2()
+        break
+      case 'braking_2':
         break
       case 'braked_2':
-        this.checkReach()
-        this.mode = 'rotate_1'
+        this.onBraked2()
         break
       case 'rotate_1':
-        this.brakeRing3()
+        this.onRotate1Stop()
+        break
+      case 'braking_1':
         break
       case 'braked_1':
-        this.calculateScores()
+        this.onBraked1()
+        break
+      case 'showing_mods':
+        break
+      case 'showing_scores':
         break
       case 'shown_scores':
-        this.prepareNextSpin()
+        this.onShownScores()
+        break
+      case 'shown_result':
+        break
+      case 'input_name':
         break
     }
   }
 
-  private startReady(): void {
+  /**
+   * first -> ready sequence
+   * Original: case "first" in changeMode (lines 239-275)
+   */
+  private onFirst(): void {
+    // Show UI elements
+    // this.infoSprite.show()
+    // this.backSprite.show()
+    this.linesSprites.show()
+
     // Initialize rings with random numbers
     const ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     const ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     const ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
     this.ringSprites1.redraw(ring1_ns, 'white')
     this.ringSprites2.redraw(ring2_ns, 'white')
     this.ringSprites3.redraw(ring3_ns, 'white')
@@ -488,13 +582,29 @@ export class MainScene extends Phaser.Scene {
     this.ringSprites2.show()
     this.ringSprites3.show()
 
-    // Play ready voices (3, 2, 1)
+    // Show total score and time
+    this.totalScoreSprites.redraw(this.total_score)
+
+    const timeValue = Rule.getTime(this.rule, this.i_second_1)
+    this.timeSprites.redraw(timeValue)
+
+    // Show bet times for rule_2 variants
+    switch (this.rule) {
+      case 'rule_2_2943':
+      case 'rule_2_8390':
+      case 'rule_2_37654':
+        this.betTimesSprites.redraw(this.bet_times)
+        break
+    }
+
+    // Play ready voices: 1 -> 2 -> 3 (matching original timing exactly)
+    // Original: 500ms -> voice_ready_1 -> 1700ms -> voice_ready_2 -> 1300ms -> voice_ready_3 -> 700ms -> ready
     this.time.delayedCall(500, () => {
-      this.audio.playSound('voice_ready_3')
-      this.time.delayedCall(700, () => {
+      this.audio.playSound('voice_ready_1')
+      this.time.delayedCall(1700, () => {
         this.audio.playSound('voice_ready_2')
-        this.time.delayedCall(700, () => {
-          this.audio.playSound('voice_ready_1')
+        this.time.delayedCall(1300, () => {
+          this.audio.playSound('voice_ready_3')
           this.time.delayedCall(700, () => {
             this.mode = 'ready'
             this.changeMode()
@@ -504,19 +614,38 @@ export class MainScene extends Phaser.Scene {
     })
   }
 
-  private startRotation(): void {
+  /**
+   * ready -> rotate_3
+   * Original: case "ready" in changeMode (lines 276-295)
+   * This is where BGM starts!
+   */
+  private onReady(): void {
     this.elapsed_time = 0
-    this.bet_times++
-    this.betTimesText.setText(`回数: ${this.bet_times}`)
-    this.mode = 'rotate_3'
+    this.audio.playBGM('bgm_1', 0.2)
 
-    // Play start and rotation sounds
-    this.audio.playSound('se_start')
-    this.audio.playSound('se_rotate', 0.3)
+    // Set opacity: ring1=normal, ring2=light, ring3=light
+    this.ringSprites1.changeOpacity('normal')
+    this.ringSprites2.changeOpacity('light')
+    this.ringSprites3.changeOpacity('light')
+
+    this.audio.playBGM('se_rotate', 1)
+    this.bet_times++
+    switch (this.rule) {
+      case 'rule_2_2943':
+      case 'rule_2_8390':
+      case 'rule_2_37654':
+        this.betTimesSprites.redraw(this.bet_times)
+        break
+    }
+
+    this.mode = 'rotate_3'
   }
 
-  private brakeRing1(): void {
-    this.mode = 'braking_3'
+  /**
+   * braking_3: brake ring1
+   * Original: case "braking_3" (lines 300-305)
+   */
+  private onBraking3(): void {
     this.ringSprites1.brake(this.speed, () => {
       this.ringSprites1.stop(this.bullet_time || this.revolution)
       this.mode = 'braked_3'
@@ -524,8 +653,23 @@ export class MainScene extends Phaser.Scene {
     })
   }
 
-  private brakeRing2(): void {
-    this.mode = 'braking_2'
+  /**
+   * braked_3 -> rotate_2
+   * Original: case "braked_3" (lines 307-312)
+   */
+  private onBraked3(): void {
+    // Set opacity: ring1=normal, ring2=normal, ring3=light
+    this.ringSprites1.changeOpacity('normal')
+    this.ringSprites2.changeOpacity('normal')
+    this.ringSprites3.changeOpacity('light')
+    this.mode = 'rotate_2'
+  }
+
+  /**
+   * braking_2: brake ring2
+   * Original: case "braking_2" (lines 317-322)
+   */
+  private onBraking2(): void {
     this.ringSprites2.brake(this.speed, () => {
       this.ringSprites2.stop(this.bullet_time || this.revolution)
       this.mode = 'braked_2'
@@ -533,19 +677,16 @@ export class MainScene extends Phaser.Scene {
     })
   }
 
-  private brakeRing3(): void {
-    this.mode = 'braking_1'
-    // Stop rotation sound when braking last ring
-    this.audio.playSound('se_stop')
+  /**
+   * braked_2: show reaches, then rotate_1
+   * Original: case "braked_2" (lines 324-346)
+   */
+  private onBraked2(): void {
+    // Set opacity: all normal
+    this.ringSprites1.changeOpacity('normal')
+    this.ringSprites2.changeOpacity('normal')
+    this.ringSprites3.changeOpacity('normal')
 
-    this.ringSprites3.brake(this.speed, () => {
-      this.ringSprites3.stop(this.bullet_time || this.revolution)
-      this.mode = 'braked_1'
-      this.changeMode()
-    })
-  }
-
-  private checkReach(): void {
     const reaches = Rule.getReaches(
       this.ringSprites1.eyes,
       this.ringSprites2.eyes
@@ -553,15 +694,14 @@ export class MainScene extends Phaser.Scene {
 
     // Show reach guides
     reaches.forEach(reach => {
-      this.showGuide(`reach_${reach}`)
+      this.guidesSprites.show(reach)
     })
 
-    // Play reach voice
     if (reaches.length > 0) {
       this.audio.playSound('voice_reach')
     }
 
-    // Check zone reaches (special numbers that trigger zones)
+    // Check zone reaches
     if (!this.bullet_time && !this.revolution) {
       const zoneReaches = Rule.getZoneReaches(
         this.ringSprites1.eyes,
@@ -571,34 +711,44 @@ export class MainScene extends Phaser.Scene {
         this.audio.playSound('se_zone_reach')
       }
     }
+
+    this.mode = 'rotate_1'
   }
 
-  private showGuide(guideKey: string): void {
-    const guide = this.add.image(155, 382, `guide_${guideKey}`)
-    guide.setAlpha(0)
-    this.guideSprites.set(guideKey, guide)
+  /**
+   * rotate_1 -> braking_1
+   * Original: case "rotate_1" (lines 347-351)
+   */
+  private onRotate1Stop(): void {
+    this.audio.stopBGM('se_rotate')
+    this.mode = 'braking_1'
+    this.onBraking1()
+  }
 
-    this.tweens.add({
-      targets: guide,
-      alpha: 1,
-      duration: 200,
+  /**
+   * braking_1: brake ring3
+   * Original: case "braking_1" (lines 352-358)
+   */
+  private onBraking1(): void {
+    this.ringSprites3.brake(this.speed, () => {
+      this.ringSprites3.stop(this.bullet_time || this.revolution)
+      this.mode = 'braked_1'
+      this.changeMode()
     })
   }
 
-  private hideGuides(): void {
-    this.guideSprites.forEach(guide => {
-      this.tweens.add({
-        targets: guide,
-        alpha: 0,
-        duration: 100,
-        onComplete: () => guide.destroy(),
-      })
-    })
-    this.guideSprites.clear()
-  }
+  /**
+   * braked_1: calculate tuples, check zones, show mods and scores
+   * Original: case "braked_1" (lines 359-476)
+   */
+  private onBraked1(): void {
+    // Set opacity: all normal
+    this.ringSprites1.changeOpacity('normal')
+    this.ringSprites2.changeOpacity('normal')
+    this.ringSprites3.changeOpacity('normal')
 
-  private calculateScores(): void {
-    this.hideGuides()
+    // Hide reach guides
+    this.guidesSprites.hide()
 
     this.tuples = Rule.calcTuples(
       this.ringSprites1.eyes,
@@ -606,21 +756,20 @@ export class MainScene extends Phaser.Scene {
       this.ringSprites3.eyes
     )
 
-    // Check for zone triggers
+    // Check for zone triggers (using reserve flag, not direct start)
+    // Original: if (this.zone_seconds <= 0) { ... reserve_start_zone = true }
     if (this.zone_seconds <= 0) {
       const zoneRolls = Rule.getZoneRolls(this.tuples)
       if (zoneRolls.length > 0) {
-        // Will start zone after this round
-        zoneRolls.forEach(roll => {
-          this.audio.playSound(`voice_zone_${roll}`)
-        })
-        this.time.delayedCall(2000, () => {
-          this.startZone()
-        })
+        this.reserve_start_zone = true
       }
+
+      zoneRolls.forEach(roll => {
+        this.audio.playSound(`voice_zone_${roll}`)
+      })
     }
 
-    // Check for ambulance (time penalty easter egg)
+    // Check for ambulance (time bonus easter egg)
     if (Rule.isAmbulance(this.tuples)) {
       this.elapsed_time -= 10 * 1000
       this.audio.playSound('se_ambulance')
@@ -630,331 +779,411 @@ export class MainScene extends Phaser.Scene {
     this.mods = Rule.calcMods(this.tuples)
     this.mode = 'showing_mods'
 
-    // Show mods and calculate scores
+    // Show mods after 300ms, then scores after 1400ms more
     this.time.delayedCall(300, () => {
-      this.showMods()
+      // Show guide for mods
+      this.guidesSprites.show('mod')
+      this.modsSprites.redraw(this.mods)
+      this.alphabetsSprites.redraw(this.tuples, this.mods)
 
       this.time.delayedCall(1400, () => {
-        const scores = Rule.calcScores(this.tuples, this.mods, this.revolution)
+        this.scores = Rule.calcScores(this.tuples, this.mods, this.revolution)
 
         // Check for rollback (triple seven effect)
         let rollback = false
-        if (this.rollbackStock > 0) {
+        if (this.rollback_stock > 0) {
           const reaches = Rule.getReaches(
             this.ringSprites1.eyes,
             this.ringSprites2.eyes
           )
-          if (reaches.length > 0 && !Rule.isMultiWon(scores)) {
-            rollback = true
+          if (reaches.length > 0) {
+            if (!Rule.isMultiWon(this.scores)) {
+              // Hide current guides and show reach guides
+              this.guidesSprites.hide()
+              this.modsSprites.hide()
+              this.alphabetsSprites.hide()
+              reaches.forEach(reach => {
+                this.guidesSprites.show(reach)
+              })
+
+              rollback = true
+            }
           }
         }
 
         if (rollback) {
           this.doRollback()
         } else {
-          this.showScoresAndFinish(scores)
+          this.showScoresAndWait()
         }
       })
     })
   }
 
-  private showMods(): void {
-    // Show guide for mods
-    this.showGuide('mod_a')
-    this.showGuide('mod_f')
-    this.showGuide('mod_i')
-
-    // Show mod values (would need proper positioning for each)
-    // For now, simplified
-  }
-
+  /**
+   * Rollback: re-spin ring 3
+   * Original: rollback logic in braked_1 (lines 414-431)
+   */
   private doRollback(): void {
-    this.rollbackStock--
-    this.hideGuides()
+    this.rollback_stock--
 
-    // Show triple seven effect
-    this.showEffect('triple_seven')
+    if (this.rollback_stock === 0) {
+      const ns = this.ringSprites3.ns
+      const color = this.ringSprites2.color // Original uses ring2's color
+      this.ringSprites3.redraw(ns, color)
+    }
+
+    this.effectSprites.show('triple_seven')
     this.time.delayedCall(1000, () => {
-      this.hideEffect()
+      this.effectSprites.hide('triple_seven')
     })
 
     this.audio.playSound('voice_rollback')
     this.stats.triple_seven.rollback++
-
-    // Redraw ring 3 with yellow if stock remains, otherwise white
-    const ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    const ring3_color = this.rollbackStock > 0 ? 'yellow' : 'white'
-    this.ringSprites3.redraw(ring3_ns, ring3_color)
-
-    // Re-spin ring 3
     this.mode = 'rotate_1'
   }
 
-  private showScoresAndFinish(scores: Score[]): void {
-    // Update stats
-    scores.forEach(score => {
-      const roll = score.roll as Roll
-      if (roll.won) {
-        this.stats.roll[roll.name as keyof typeof this.stats.roll]++
+  /**
+   * Show scores and wait for player interaction.
+   * Original: else branch in rollback check (lines 432-475)
+   */
+  private showScoresAndWait(): void {
+    // Update stats (original uses score.won, not score.roll.won)
+    this.scores.forEach(score => {
+      if (score.won && typeof score.roll !== 'string') {
+        this.stats.roll[score.roll.name as keyof typeof this.stats.roll]++
       } else {
         this.stats.roll.buta++
       }
     })
 
-    const currentScores = Rule.calcCurrentScores(scores)
-    this.currentScores = currentScores
+    this.current_scores = Rule.calcCurrentScores(this.scores)
 
-    if (currentScores[2] >= 100) {
+    if (this.current_scores[2] >= 100) {
       this.i_combo++
       this.stats.max_combo = Math.max(this.stats.max_combo, this.i_combo)
     } else {
       this.i_combo = 0
     }
 
-    const finalScores = Rule.addComboScore(currentScores, this.i_combo)
-    this.total_score = Rule.calcTotalScore(this.total_score, finalScores)
-    this.stats.max_gain = Math.max(this.stats.max_gain, finalScores[3])
+    this.current_scores = Rule.addComboScore(this.current_scores, this.i_combo)
+    this.total_score = Rule.calcTotalScore(
+      this.total_score,
+      this.current_scores
+    )
+
+    this.stats.max_gain = Math.max(this.stats.max_gain, this.current_scores[3])
 
     this.mode = 'showing_scores'
+    this.scoresSprites.redraw(this.scores, this.revolution)
 
-    // Display scores using new sprite classes
-    this.scoresSprites.show(scores)
-    this.currentScoreSprites.show(finalScores)
-
-    // Play sound effects based on scores
-    if (finalScores[0] > 0) {
-      this.audio.playSound('se_win')
-    }
-    if (finalScores[1] > finalScores[0]) {
-      this.time.delayedCall(500, () => {
-        this.audio.playSound('se_win')
-      })
-    }
-    if (finalScores[2] > finalScores[1]) {
-      this.time.delayedCall(1000, () => {
-        this.audio.playSound('se_multi')
-      })
-    }
-    if (finalScores[3] !== finalScores[2]) {
-      this.time.delayedCall(1500, () => {
-        this.audio.playSound('voice_combo')
-      })
+    if (this.i_combo >= 2) {
+      this.comboSprites.redraw(this.i_combo)
     }
 
-    const wait = finalScores[3] !== finalScores[2] ? 2000 : 1500
+    this.currentScoreSprites.redraw(this.current_scores)
+
+    let wait = 1000
+    if (this.current_scores[3] !== this.current_scores[2]) {
+      wait = 1500
+    }
 
     this.time.delayedCall(wait, () => {
       this.totalScoreSprites.redraw(this.total_score)
-      this.totalScoreText.setText(`スコア: ${this.total_score}`)
       this.mode = 'shown_scores'
-
-      if (Rule.isAchieved(this.rule, this.elapsed_time, this.total_score)) {
-        this.finishGame()
-      }
+      // NOTE: isAchieved is checked when the player clicks/presses space
+      // in shown_scores state, NOT here. This matches the original.
     })
   }
 
-  private startZone(): void {
-    this.zone_seconds = 30
-    this.audio.changeBGMVolume(0.1) // Lower BGM volume during zone
-
-    // Randomly choose bullet time or revolution
-    if (Math.random() > 0.5) {
-      this.bullet_time = true
-      this.speed = 2
-      this.showEffect('bullet_time')
-      this.audio.playSound('se_start_bullet_time')
-      this.audio.playSound('voice_bullet_time')
-      this.stats.zone.bullet_time++
-    } else {
-      this.revolution = true
-      this.showEffect('revolution')
-      this.audio.playSound('se_start_revolution')
-      this.audio.playSound('voice_revolution')
-      this.stats.zone.revolution++
-    }
-  }
-
-  private finishZone(): void {
-    this.zone_seconds = 0
-    this.audio.changeBGMVolume(0.2) // Restore BGM volume
-
-    if (this.bullet_time) {
-      this.speed = 4
-      this.audio.playSound('se_speed_up')
+  /**
+   * shown_scores: check achievement or prepare next spin
+   * Original: case "shown_scores" in changeMode (lines 481-656)
+   * This is called when the player clicks/presses space in shown_scores state.
+   */
+  private onShownScores(): void {
+    // Check if game is achieved
+    if (Rule.isAchieved(this.rule, this.elapsed_time, this.total_score)) {
+      this.finishGame()
+      return
     }
 
-    if (this.revolution) {
-      this.audio.playSound('se_finish_revolution')
-    }
-
-    this.bullet_time = false
-    this.revolution = false
-    this.hideEffect()
-  }
-
-  private showEffect(effectType: string): void {
-    if (this.effectSprite) {
-      this.effectSprite.destroy()
-    }
-
-    this.effectSprite = this.add.image(320, 480, `bg_${effectType}`)
-    this.effectSprite.setAlpha(0)
-    this.effectSprite.setDepth(-1) // Behind everything else
-
-    this.tweens.add({
-      targets: this.effectSprite,
-      alpha: 0.5,
-      duration: 500,
-    })
-  }
-
-  private hideEffect(): void {
-    if (this.effectSprite) {
-      this.tweens.add({
-        targets: this.effectSprite,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => {
-          if (this.effectSprite) {
-            this.effectSprite.destroy()
-            this.effectSprite = null
-          }
-        },
-      })
-    }
-  }
-
-  private finishGame(): void {
-    this.audio.stopBGM()
-    this.audio.playBGM('bgm_result', 0.1)
-    this.mode = 'shown_result'
-
-    // Clear game elements
-    this.hideGuides()
+    // --- Prepare next spin ---
+    // Hide all score-related displays
+    this.guidesSprites.hide()
+    this.modsSprites.hide()
+    this.alphabetsSprites.hide()
     this.scoresSprites.hide()
+    this.comboSprites.hide()
     this.currentScoreSprites.hide()
 
-    // Show result overlay
-    const resultBg = this.add.rectangle(320, 480, 640, 960, 0x000000, 0.8)
-    resultBg.setDepth(100)
+    // Adjust speed (only if not in bullet_time)
+    const current_score = this.current_scores[3]
 
-    const resultText = this.add.text(320, 200, 'GAME CLEAR!', {
-      fontSize: '48px',
-      color: '#FFD700',
-      fontStyle: 'bold',
-    })
-    resultText.setOrigin(0.5)
-    resultText.setDepth(101)
+    if (!this.bullet_time) {
+      const speed_bk = this.speed
+      this.speed = Rule.getNextSpeed(this.speed, current_score)
 
-    const statsText = this.add.text(
-      320,
-      300,
-      `ルール: ${this.rule}
-時間: ${Math.floor(this.elapsed_time / 1000)}秒
-回数: ${this.bet_times}回
-スコア: ${this.total_score}
-
-最大コンボ: ${this.stats.max_combo}
-最大獲得: ${this.stats.max_gain}
-バレットタイム: ${this.stats.zone.bullet_time}回
-レボリューション: ${this.stats.zone.revolution}回
-
-クリックでタイトルへ`,
-      {
-        fontSize: '24px',
-        color: '#FFFFFF',
-        align: 'left',
-      }
-    )
-    statsText.setOrigin(0.5)
-    statsText.setDepth(101)
-
-    // Return to title on click
-    this.input.once('pointerdown', () => {
-      this.scene.start('TitleScene', { back: true })
-    })
-  }
-
-  private prepareNextSpin(): void {
-    // Clear score displays
-    this.hideGuides()
-    this.scoresSprites.hide()
-    this.currentScoreSprites.hide()
-
-    // Adjust speed based on current score (if not in bullet time)
-    if (!this.bullet_time && this.currentScores.length > 0) {
-      const currentScore = this.currentScores[3]
-      const oldSpeed = this.speed
-      this.speed = Rule.getNextSpeed(this.speed, currentScore)
-
-      if (this.speed > oldSpeed) {
+      if (this.speed > speed_bk) {
         this.audio.playSound('se_speed_up')
-      } else if (this.speed < oldSpeed) {
+      } else if (this.speed < speed_bk) {
         this.audio.playSound('se_speed_down')
+      }
+    }
+
+    // Handle zone finish (via reserve flag)
+    if (this.reserve_finish_zone) {
+      this.reserve_finish_zone = false
+      this.zone_seconds = 0
+      this.audio.changeBGMVolume(0.2)
+
+      if (this.bullet_time) {
+        this.speed = this.speed_bk
+        this.audio.playSound('se_speed_up')
+      }
+
+      if (this.revolution) {
+        this.audio.playSound('se_finish_revolution')
+      }
+
+      this.bullet_time = false
+      this.revolution = false
+      this.effectSprites.hide()
+    }
+
+    // Handle zone start (via reserve flag)
+    if (this.reserve_start_zone) {
+      this.reserve_start_zone = false
+      this.zone_seconds = 30
+      this.audio.changeBGMVolume(0.1)
+
+      // Randomly choose bullet time or revolution (original uses _.random(0,1) > 0)
+      if (Math.random() > 0.5) {
+        this.bullet_time = true
+        this.speed_bk = this.speed
+        this.speed = 2
+        this.effectSprites.show('bullet_time')
+        this.audio.playSound('se_start_bullet_time')
+        this.audio.playSound('voice_bullet_time')
+        this.stats.zone.bullet_time++
+      } else {
+        this.revolution = true
+        this.effectSprites.show('revolution')
+        this.audio.playSound('se_start_revolution')
+        this.audio.playSound('voice_revolution')
+        this.stats.zone.revolution++
       }
     }
 
     // Determine ring color
     let color = 'white'
-    let ring1_ns: number[]
-    let ring2_ns: number[]
-    let ring3_ns: number[]
-
-    if (this.currentScores.length > 0) {
-      // Check if pink ribbon was won
-      const scores = Rule.calcScores(this.tuples, this.mods, this.revolution)
-      if (Rule.isPinkRibbon(scores)) {
-        color = 'pink'
-      }
-
-      // Check for triple seven
-      if (Rule.isTripleSeven(scores)) {
-        this.showEffect('triple_seven')
-        this.time.delayedCall(1000, () => {
-          this.hideEffect()
-        })
-
-        this.audio.playSound('voice_triple_seven')
-
-        const effect = Rule.getTripleSevenEffect(this.rollbackStock, this.stats)
-        ring1_ns = effect.ring1_ns
-        ring2_ns = effect.ring2_ns
-        ring3_ns = effect.ring3_ns
-        this.rollbackStock = effect.rollback_stock
-        // Update stats from effect (merge the records)
-        Object.assign(this.stats.roll, effect.stats.roll)
-        Object.assign(this.stats.zone, effect.stats.zone)
-        Object.assign(this.stats.triple_seven, effect.stats.triple_seven)
-        Object.assign(this.stats.egg, effect.stats.egg)
-        this.stats.max_combo = effect.stats.max_combo
-        this.stats.max_gain = effect.stats.max_gain
-
-        const ring3_color = this.rollbackStock > 0 ? 'yellow' : color
-        this.ringSprites1.redraw(ring1_ns, color)
-        this.ringSprites2.redraw(ring2_ns, color)
-        this.ringSprites3.redraw(ring3_ns, ring3_color)
-      } else {
-        // Normal shuffle
-        ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-        this.ringSprites1.redraw(ring1_ns, color)
-        this.ringSprites2.redraw(ring2_ns, color)
-        this.ringSprites3.redraw(ring3_ns, color)
-      }
-    } else {
-      // First spin
-      ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-      ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-      ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-      this.ringSprites1.redraw(ring1_ns, color)
-      this.ringSprites2.redraw(ring2_ns, color)
-      this.ringSprites3.redraw(ring3_ns, color)
+    if (Rule.isPinkRibbon(this.scores)) {
+      color = 'pink'
     }
 
-    this.startRotation()
+    // Generate new ring numbers
+    let ring1_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    let ring2_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    let ring3_ns = Rule.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    // Check for triple seven effect
+    if (Rule.isTripleSeven(this.scores)) {
+      this.effectSprites.show('triple_seven')
+      this.time.delayedCall(1000, () => {
+        this.effectSprites.hide('triple_seven')
+      })
+
+      this.audio.playSound('voice_triple_seven')
+
+      const effect = Rule.getTripleSevenEffect(this.rollback_stock, this.stats)
+      ring1_ns = effect.ring1_ns
+      ring2_ns = effect.ring2_ns
+      ring3_ns = effect.ring3_ns
+      this.rollback_stock = effect.rollback_stock
+      this.stats = effect.stats as typeof this.stats
+    }
+
+    // Redraw rings
+    this.ringSprites1.redraw(ring1_ns, color)
+    this.ringSprites2.redraw(ring2_ns, color)
+
+    if (this.rollback_stock === 0) {
+      this.ringSprites3.redraw(ring3_ns, color)
+    } else {
+      this.ringSprites3.redraw(ring3_ns, 'yellow')
+    }
+
+    // Set opacity: ring1=normal, ring2=light, ring3=light
+    this.ringSprites1.changeOpacity('normal')
+    this.ringSprites2.changeOpacity('light')
+    this.ringSprites3.changeOpacity('light')
+
+    // Change ring patterns (visual perspective variation)
+    this.ringSprites1.changeRingPattern()
+    this.ringSprites2.changeRingPattern()
+    this.ringSprites3.changeRingPattern()
+
+    // Check for background change (every 1000 points)
+    const i_score_1000 = Math.floor(this.total_score / 1000)
+    if (i_score_1000 !== this.i_score_1000) {
+      this.i_score_1000 = i_score_1000
+      if (this.i_score_1000 < 0) {
+        this.i_score_1000 = 0
+      }
+      this.backgroundSprites.change(this.i_score_1000, this.rule)
+    }
+
+    // Check for BGM change (every minute, via reserve flag)
+    if (this.reserve_change_BGM) {
+      this.reserve_change_BGM = false
+      this.audio.changeBGM()
+    }
+
+    // Play start sound and start se_rotate loop (original: SoundManager.playMusic + Audio.playBGM)
+    this.audio.playSound('se_start')
+    this.audio.playBGM('se_rotate', 1)
+
+    // Increment bet times
+    this.bet_times++
+    switch (this.rule) {
+      case 'rule_2_2943':
+      case 'rule_2_8390':
+      case 'rule_2_37654':
+        this.betTimesSprites.redraw(this.bet_times)
+        break
+    }
+
+    this.mode = 'rotate_3'
+  }
+
+  /**
+   * Game clear: show result screen
+   * Original: shown_scores isAchieved branch (lines 482-524)
+   */
+  private finishGame(): void {
+    this.audio.stopAllBGM()
+    this.audio.playBGM('bgm_result', 0.1)
+
+    // Determine high score
+    let isHighScore = false
+    const savedHighScores = this.getHighScores()
+    switch (this.rule) {
+      case 'rule_1_2943':
+      case 'rule_1_8390':
+      case 'rule_1_37654':
+        if (
+          savedHighScores[this.rule] === null ||
+          this.elapsed_time < savedHighScores[this.rule]!
+        ) {
+          isHighScore = true
+          savedHighScores[this.rule] = this.elapsed_time
+        }
+        break
+      case 'rule_2_2943':
+      case 'rule_2_8390':
+      case 'rule_2_37654':
+        if (
+          savedHighScores[this.rule] === null ||
+          this.bet_times < savedHighScores[this.rule]!
+        ) {
+          isHighScore = true
+          savedHighScores[this.rule] = this.bet_times
+        }
+        break
+      case 'rule_3_0409':
+      case 'rule_3_2009':
+      case 'rule_3_6819':
+        if (
+          savedHighScores[this.rule] === null ||
+          this.total_score > savedHighScores[this.rule]!
+        ) {
+          isHighScore = true
+          savedHighScores[this.rule] = this.total_score
+        }
+        break
+    }
+    this.saveHighScores(savedHighScores)
+
+    // Show result
+    this.resultSprites.redraw(
+      this.rule,
+      this.elapsed_time,
+      this.bet_times,
+      this.total_score,
+      this.stats,
+      isHighScore
+    )
+
+    this.mode = 'shown_result'
+
+    // Play result voices (original: voice_result, then 1500ms later voice_result_high_score or voice_result_negi)
+    this.audio.playSound('voice_result')
+    this.time.delayedCall(1500, () => {
+      if (isHighScore) {
+        this.audio.playSound('voice_result_high_score')
+      } else {
+        this.audio.playSound('voice_result_negi')
+      }
+    })
+
+    // Button handlers
+    const btnChangeRule = this.resultSprites.getButtonChangeRule()
+    const btnOneMore = this.resultSprites.getButtonOneMore()
+
+    btnChangeRule.on('pointerover', () => {
+      if (this.mode !== 'shown_result') return
+      btnChangeRule.setTexture('button_change_rule_hover')
+      this.audio.playSound('voice_back')
+    })
+    btnChangeRule.on('pointerout', () => {
+      btnChangeRule.setTexture('button_change_rule')
+    })
+    btnChangeRule.on('pointerdown', () => {
+      if (this.mode !== 'shown_result') return
+      this.audio.stopAllBGM()
+      this.scene.start('TitleScene', { back: true })
+    })
+
+    btnOneMore.on('pointerover', () => {
+      if (this.mode !== 'shown_result') return
+      btnOneMore.setTexture('button_one_more_hover')
+      this.audio.playSound('voice_one_more')
+    })
+    btnOneMore.on('pointerout', () => {
+      btnOneMore.setTexture('button_one_more')
+    })
+    btnOneMore.on('pointerdown', () => {
+      if (this.mode !== 'shown_result') return
+      this.audio.stopAllBGM()
+      this.scene.start('MainScene', { rule: this.rule })
+    })
+  }
+
+  private getHighScores(): Record<string, number | null> {
+    try {
+      const saved = localStorage.getItem('cee-lo-rings-high-scores')
+      if (saved) return JSON.parse(saved)
+    } catch {
+      /* ignore */
+    }
+    return {
+      rule_1_2943: null,
+      rule_1_8390: null,
+      rule_1_37654: null,
+      rule_2_2943: null,
+      rule_2_8390: null,
+      rule_2_37654: null,
+      rule_3_0409: null,
+      rule_3_2009: null,
+      rule_3_6819: null,
+    }
+  }
+
+  private saveHighScores(scores: Record<string, number | null>): void {
+    try {
+      localStorage.setItem('cee-lo-rings-high-scores', JSON.stringify(scores))
+    } catch {
+      /* ignore */
+    }
   }
 }
