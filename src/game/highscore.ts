@@ -1,42 +1,23 @@
-import type { RuleType } from './rule'
+import { RuleId } from './rule'
 
-const KEY = 'cee-lo-rings-high-scores'
+const STORAGE_KEY = 'cee-lo-rings-highscore'
 
-export type HighScores = Record<RuleType, number | null>
+export type HighScoreMap = Partial<Record<RuleId, number>>
 
-const RULE_IDS: RuleType[] = [
-  'rule_1_2943',
-  'rule_1_8390',
-  'rule_1_37654',
-  'rule_2_2943',
-  'rule_2_8390',
-  'rule_2_37654',
-  'rule_3_0409',
-  'rule_3_2009',
-  'rule_3_6819',
-]
-
-function empty(): HighScores {
-  return RULE_IDS.reduce((acc, id) => {
-    acc[id] = null
-    return acc
-  }, {} as HighScores)
-}
-
-export function load(): HighScores {
+export const loadHighScore = (): HighScoreMap => {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (raw) return { ...empty(), ...JSON.parse(raw) }
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as HighScoreMap
   } catch {
-    /* ignore */
+    return {}
   }
-  return empty()
 }
 
-export function save(scores: HighScores): void {
+export const saveHighScore = (map: HighScoreMap): void => {
   try {
-    localStorage.setItem(KEY, JSON.stringify(scores))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
   } catch {
-    /* ignore */
+    // ignore quota / privacy mode
   }
 }
