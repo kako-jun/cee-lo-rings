@@ -40,14 +40,14 @@ npm install
 npm run dev
 ```
 
-http://localhost:5173/cee-lo-rings/ で開く
+http://localhost:3000/cee-lo-rings/ で開く
 
 ## 技術スタック
 
-- Phaser 3（ゲームフレームワーク）
-- React 18 + TypeScript
-- Vite
-- Tailwind CSS
+- PixiJS 8（レンダリング）
+- gsap（Tween / アニメーション）
+- Howler.js（オーディオ）
+- TypeScript + Vite
 
 ## ライセンス
 
