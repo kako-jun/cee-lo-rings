@@ -4,6 +4,7 @@
 // Network 通信 (rank 取得/送信) は省略 (Phina の Network.* を呼んでいた箇所はスタブ)
 
 import { Text, TextStyle } from 'pixi.js'
+import { gsap } from 'gsap'
 import { Audio } from '../audio'
 import { Scene } from '../Scene'
 import { Rule, RuleId, Stats } from '../rule'
@@ -22,37 +23,28 @@ const labelStyle = (size = 21): TextStyle =>
 class Label extends Text {
   imageName = ''
   meta: Record<string, unknown> = {}
+  private fadeTween: gsap.core.Tween | null = null
+
   constructor(initial = '', size = 21) {
     super({ text: initial, style: labelStyle(size) })
     this.anchor.set(0, 0.5)
     this.alpha = 0
   }
+
   fadeIn(): void {
-    // GSAP 経由でフェード
-    const start = this.alpha
-    const target = 1
-    const dur = 200
-    const t0 = performance.now()
-    const tick = () => {
-      const dt = performance.now() - t0
-      const k = Math.min(1, dt / dur)
-      this.alpha = start + (target - start) * k
-      if (k < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
+    this.fadeTween?.kill()
+    this.fadeTween = gsap.to(this, { alpha: 1, duration: 0.2 })
   }
+
   fadeOut(): void {
-    const start = this.alpha
-    const target = 0
-    const dur = 50
-    const t0 = performance.now()
-    const tick = () => {
-      const dt = performance.now() - t0
-      const k = Math.min(1, dt / dur)
-      this.alpha = start + (target - start) * k
-      if (k < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
+    this.fadeTween?.kill()
+    this.fadeTween = gsap.to(this, { alpha: 0, duration: 0.05 })
+  }
+
+  override destroy(options?: Parameters<Text['destroy']>[0]): void {
+    this.fadeTween?.kill()
+    this.fadeTween = null
+    super.destroy(options)
   }
 }
 

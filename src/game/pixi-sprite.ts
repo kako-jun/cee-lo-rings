@@ -333,11 +333,22 @@ export class GameSprite extends Sprite {
   }
 
   remove(): void {
-    this.currentTweener?.stop()
-    for (const t of this.interactiveTweeners) t.stop()
-    this.interactiveTweeners = []
+    this.killTweens()
     if (this.parent) this.parent.removeChild(this)
     this.destroy()
+  }
+
+  // Pixi の destroy() 経由 (Scene.destroy({children:true})) でも GSAP timeline を確実に止める
+  override destroy(options?: Parameters<Sprite['destroy']>[0]): void {
+    this.killTweens()
+    super.destroy(options)
+  }
+
+  private killTweens(): void {
+    this.currentTweener?.stop()
+    this.currentTweener = null
+    for (const t of this.interactiveTweeners) t.stop()
+    this.interactiveTweeners = []
   }
 }
 
