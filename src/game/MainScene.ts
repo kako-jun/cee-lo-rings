@@ -81,6 +81,9 @@ export class MainScene extends Scene {
       this.applyState(initial)
     }
     this.build()
+    if (initial) {
+      this.restoreRingVisuals(initial)
+    }
     this.attachInput()
     this.onTick(ticker => this.tick(ticker.deltaMS))
     // Kick off the state machine after a 1s delay (matches original).
@@ -104,6 +107,16 @@ export class MainScene extends Scene {
     this.reserve_start_zone = s.reserveStartZone
     this.reserve_finish_zone = s.reserveFinishZone
     this.stats = s.stats
+  }
+
+  // Restore ring digits/colors. Score-display sprites (tuples / mods / scores)
+  // are NOT restored — the state machine recomputes them at the next spin.
+  // Useful for resuming rotate_* / braked_* modes; static result modes still
+  // require a fresh spin to fully repaint the score side.
+  private restoreRingVisuals(s: GameState): void {
+    if (s.rings[0]) this.ringSprites1.redraw(s.rings[0].ns, s.rings[0].color)
+    if (s.rings[1]) this.ringSprites2.redraw(s.rings[1].ns, s.rings[1].color)
+    if (s.rings[2]) this.ringSprites3.redraw(s.rings[2].ns, s.rings[2].color)
   }
 
   private build(): void {

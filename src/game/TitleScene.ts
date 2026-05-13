@@ -90,6 +90,8 @@ export class TitleScene extends Scene {
       this.infoButton.texture = Assets.get('button_info')
     })
     this.infoButton.on('pointerdown', () => {
+      // window.open is async/non-blocking; debounce so a double-click doesn't
+      // also fall through to showRuleSelection via the title-click handler.
       this.preventClick = true
       this.delayedCall(100, () => {
         this.preventClick = false
