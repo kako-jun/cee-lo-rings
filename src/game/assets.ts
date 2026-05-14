@@ -3,7 +3,7 @@ import { Assets } from 'pixi.js'
 const imageUrls = import.meta.glob(
   [
     '../assets/image/ring/*.png',
-    '../assets/image/bg/*.png',
+    '../assets/image/bg/*.webp',
     '../assets/image/title/{bg_title,button_back,button_back_hover,button_info,button_info_hover,rule_1,rule_2,rule_3,rule_1_2943,rule_1_2943_hover,rule_1_8390,rule_1_8390_hover,rule_1_37654,rule_1_37654_hover,rule_2_2943,rule_2_2943_hover,rule_2_8390,rule_2_8390_hover,rule_2_37654,rule_2_37654_hover,rule_3_0409,rule_3_0409_hover,rule_3_2009,rule_3_2009_hover,rule_3_6819,rule_3_6819_hover}.png',
     '../assets/image/guide/*.png',
     '../assets/image/score/*.png',
@@ -27,7 +27,7 @@ function pathToKey(path: string): string {
   return path
     .split('/')
     .pop()!
-    .replace(/\.(png|ogg)$/, '')
+    .replace(/\.(png|webp|ogg)$/, '')
 }
 
 const BGM_FILE_TO_KEY: Record<string, string> = {
