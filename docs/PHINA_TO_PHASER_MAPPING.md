@@ -352,12 +352,24 @@ All assets from original must be loaded:
 - All effect images
 - All sound effects and BGM tracks
 
-## Next Steps for Complete Port
+## Port Status
 
 1. ✅ Create this mapping document
-2. ⏸️ Implement all sprite classes with exact animations
-3. ⏸️ Fix ring brake() method for precise stopping
-4. ⏸️ Add all missing UI elements
-5. ⏸️ Implement complete audio system
-6. ⏸️ Add all decorative animations
-7. ⏸️ Test and debug all features
+2. ✅ Implement all sprite classes with exact animations
+3. ✅ Fix ring brake() method for precise stopping (+ zero-duration tween freeze fix, see ARCHITECTURE.md)
+4. ✅ Add all missing UI elements
+5. ✅ Implement complete audio system (howler.js)
+6. ✅ Add all decorative animations
+7. 🔄 Test and debug all features (ongoing)
+
+なお、本ドキュメントは Phaser 移植を試みた時点の比較メモであり、最終的な実装は **PixiJS + gsap + howler.js**。コード例の `this.tweens.add(...)` は実コードでは `this.scene.tween(target, vars)` (gsap ラッパ) に置き換わっている。
+
+## 意図的に省略した機能
+
+phina.js 原本にあったが、PixiJS 移植では現代的な構成に合わないため意図的に省略:
+
+- **Network ranking** (`network.js` / 独自 Ruby サーバー `server.rb`)
+  - 現状: `highscore.ts` で localStorage によるローカル自己ベスト記録 (Records)
+  - 将来: Nostralgic Ranking と連携して世界順位を復活予定 ([Issue #20](https://github.com/kako-jun/cee-lo-rings/issues/20))
+- **Screenshot 機能** (`Network.shot()` / sprite.js `InfoSprite.calc()`)
+  - 現代ブラウザの標準機能で代替可能なため削除
