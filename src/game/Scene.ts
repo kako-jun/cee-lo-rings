@@ -55,8 +55,15 @@ export class Scene extends Container {
   /** Track a gsap tween so it can be killed on scene destroy. */
   trackTween<T extends gsap.core.Tween>(tween: T): T {
     this.tweens.add(tween)
+    // gsap's eventCallback REPLACES the callback. Preserve any user-supplied
+    // onComplete by composing it with the cleanup, otherwise every
+    // Scene.tween({ onComplete }) silently loses its callback.
+    const userOnComplete = tween.eventCallback('onComplete') as
+      | (() => void)
+      | null
     tween.eventCallback('onComplete', () => {
       this.tweens.delete(tween)
+      userOnComplete?.()
     })
     return tween
   }

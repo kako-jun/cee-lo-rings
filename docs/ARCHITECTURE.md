@@ -375,6 +375,12 @@ npm run build    # dist/ に静的ファイル
 - 残りの tween は `tween.then()` で待つ（`eventCallback('onComplete', r)` だと `Scene.trackTween` のクリーンアップが上書きされる）
 - `Scene.destroy()` 後のコールバックは `disposed` フラグでガードされる
 
+### スコア表示が前ステップを消さずに重なる / アニメが進まない
+
+- gsap の `eventCallback('onComplete', fn)` は **既存コールバックを置換する** ため、素朴に `trackTween` で `tween.eventCallback('onComplete', cleanup)` をすると、ユーザーが `vars.onComplete` で渡したコールバックが無音で破棄される
+- `Scene.trackTween` ではユーザー側の `onComplete` を一旦取り出し、cleanup と合成して再設定すること
+- 影響範囲: `CurrentScoreSprites` の me/kabu/multi fade-out 連鎖、`TitleScene` の intro voice 起点、`Sprites.ts` の各種ループアニメ（rotation/scale chain）
+
 ### スコアが合わない
 
 - `Rule.calcScores()` の評価順序 (Multi → Me → Kabu) を確認
