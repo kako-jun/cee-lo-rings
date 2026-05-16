@@ -134,6 +134,12 @@ export class RingSprites {
       const dn = Math.floor(dy / 42)
       const destY = initialY + 42 * dn
       const destDy = destY - sprite.y
+      if (destDy === 0) {
+        // Already at a snap position — no tween needed. A zero-duration gsap
+        // tween's onComplete is not reliable enough to gate Promise.all on.
+        this.transform(sprite)
+        return
+      }
       const duration = 0.01 * Math.abs(destDy) // seconds (was 10ms/px)
       const tween = this.scene.tween(sprite, {
         y: destY,
@@ -143,9 +149,10 @@ export class RingSprites {
       })
       tweens.push(tween)
     })
-    await Promise.all(
-      tweens.map(t => new Promise<void>(r => t.eventCallback('onComplete', r)))
-    )
+    if (tweens.length === 0) return
+    // gsap 3 tweens are thenable; awaiting via .then() leaves the trackTween
+    // cleanup callback intact instead of clobbering it with eventCallback.
+    await Promise.all(tweens.map(t => t.then()))
   }
 
   stop(isZone: boolean): void {
