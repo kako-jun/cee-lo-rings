@@ -10,6 +10,7 @@ import type { RuleType } from './rule'
 
 const STAGE_WIDTH = 640
 const STAGE_HEIGHT = 960
+const STAGE_ASPECT = STAGE_WIDTH / STAGE_HEIGHT
 
 export class App {
   private app: Application
@@ -29,6 +30,8 @@ export class App {
       height: STAGE_HEIGHT,
       background: '#732121',
       antialias: true,
+      autoDensity: true,
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
       preference: 'webgl',
     })
     this.app.stage.sortableChildren = true
@@ -36,6 +39,20 @@ export class App {
     const gameEl = document.getElementById('game')
     if (!gameEl) throw new Error('#game element missing')
     gameEl.appendChild(this.app.canvas)
+    const resizeCanvas = (): void => {
+      const windowAspect = window.innerWidth / window.innerHeight
+      const displayH =
+        windowAspect > STAGE_ASPECT
+          ? Math.floor(window.innerHeight)
+          : Math.floor(window.innerWidth / STAGE_ASPECT)
+      const displayW = Math.floor(displayH * STAGE_ASPECT)
+      this.app.renderer.resize(displayW, displayH)
+      this.app.stage.scale.set(displayW / STAGE_WIDTH)
+      this.app.canvas.style.width = `${displayW}px`
+      this.app.canvas.style.height = `${displayH}px`
+    }
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
 
     const updateBar = (p: number) => {
       if (progressEl) {

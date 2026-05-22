@@ -49,6 +49,10 @@ http://localhost:3000/cee-lo-rings/ で開く
 - Howler.js（オーディオ）
 - TypeScript + Vite
 
+## 表示サイズ
+
+縦長ゲーム共通の論理解像度は 640×960 (2:3)。canvas は CSS で拡大せず、`src/game/App.ts` の `renderer.resize()` と `stage.scale` で viewport に収まる実 canvas サイズへ合わせる。
+
 ## ライセンス
 
 MIT
