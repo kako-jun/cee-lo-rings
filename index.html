@@ -8,7 +8,13 @@
     <style>
       html, body { margin: 0; padding: 0; background: #732121; overflow: hidden; }
       body { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-      canvas { display: block; }
+      canvas {
+        display: block;
+        /* 2:3 (640x960 縦長) を縦横独立に縮められて歪まないようアスペクト比固定 */
+        width: min(100vw, calc(100vh * 2 / 3));
+        height: min(100vh, calc(100vw * 3 / 2));
+        aspect-ratio: 2 / 3;
+      }
       #loading {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
